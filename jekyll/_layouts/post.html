@@ -1,0 +1,27 @@
+---
+layout: default
+---
+
+<div class='post'>
+  <h1 class='title'>{{ page.title }}</h2>
+  <p class='meta'>{{ page.date | date_to_string }}</p>
+
+  <div class='content'>
+  {{ content }}
+  </div>
+
+  {%- if page.categories -%}
+    <div class="categories-links">
+      Tags:
+      {%- for category in page.categories -%}
+      <a href="/categories/{{ category }}/" class='category'> {{ category }} </a>
+      {%- endfor -%}
+    </div>
+  {%- endif -%}
+
+  <div id='post-footer'>
+    {% include post_nav.html %}
+  </div>
+
+  {% include comments.html %}
+</div>

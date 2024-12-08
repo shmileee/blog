@@ -1,14 +1,14 @@
+name: Oleksandr Ponomarov
 title: hitchhiker's notes
 email: ponomarov.aleksandr@gmail.com
 description: >-
   A home for poorly researched ideas that I find myself repeating a lot anyway.
-twitter_username: sqrt16bit
-github_username: shmileee
 
 baseurl: "/"
 
-theme: minima
+permalink: /posts/:title/
+
 plugins:
   - jekyll-feed
-
-permalink: /:year/:month/:day/:title.html
+  - jekyll-redirect-from
+  - jekyll-sitemap

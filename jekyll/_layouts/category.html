@@ -1,0 +1,27 @@
+---
+layout: default
+---
+
+<div class='post page'>
+  <h1 class='title'>{{ page.title }}</h2>
+  <p><small><i>Showing posts tagged with #{{ page.category }}</i></small></p>
+</div>
+
+<div class='posts'>
+  <div class="post-listing">
+    <ul>
+      {% for post in site.posts %}
+        {% if post.categories contains page.category %}
+          <li>
+            <code class="published-on">{{ post.date | date: "%d %b %Y" }}</code>
+            <a class="title" href="{{ post.url }}">{{ post.title }}</a>
+
+            {% for category in post.categories %}
+              <a href="/categories/{{ category }}/" class='category'> {{ category }} </a>
+            {% endfor %}
+          </li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+  </div>
+</div>
