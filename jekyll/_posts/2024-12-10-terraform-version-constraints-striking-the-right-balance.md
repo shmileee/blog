@@ -8,8 +8,8 @@ date: 2024-12-10
 Managing provider versions in Terraform is an exercise in balancing stability
 with flexibility. Locking down versions too tightly can stifle progress, while
 overly loose constraints risk unexpected breakage. Here’s how to apply version
-constraints thoughtfully to ensure smooth operations across root module (aka stacks)
-and regular modules.
+constraints thoughtfully to ensure smooth operations across regular modules and
+root modules (aka stacks).
 
 #### Modules: Use Minimum Working & Tested Version
 
