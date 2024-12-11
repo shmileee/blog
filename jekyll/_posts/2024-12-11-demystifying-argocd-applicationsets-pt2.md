@@ -4,7 +4,7 @@ categories:
   - argocd
   - kubernetes
 layout: post
-date: 2024-12-11 11:00
+date: 2024-12-11 11:00:00
 ---
 
 In the [previous]({% post_url

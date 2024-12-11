@@ -4,7 +4,7 @@ categories:
   - argocd
   - kubernetes
 layout: post
-date: 2024-12-11 10:30
+date: 2024-12-11 10:30:00
 ---
 
 `ApplicationSet` is a custom resource (CR) that describes how to create a set
