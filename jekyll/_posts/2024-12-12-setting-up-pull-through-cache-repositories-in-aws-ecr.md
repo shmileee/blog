@@ -4,7 +4,7 @@ categories:
   - aws
   - terraform
 layout: post
-date: 2024-12-12 10:00:00
+date: 2024-12-12 08:00:00
 ---
 
 A pull through cache repository acts as a proxy of an upstream Docker registry.
