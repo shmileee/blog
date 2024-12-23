@@ -9,7 +9,7 @@ categories:
 ---
 
 As a continuation of [Setting Up Pull Through Cache Repositories in AWS
-ECR](./2024-12-12-setting-up-pull-through-cache-repositories-in-aws-ecr.md),
+ECR]({% post_url 2024-12-12-setting-up-pull-through-cache-repositories-in-aws-ecr %}),
 you might want to roll them out gradually to a live Kubernetes cluster without
 causing disruption or excessive effort. While you will eventually need to
 update your manifests to point to the correct ECR registry, scaling this across
