@@ -24,7 +24,7 @@ I use [Alacritty](https://alacritty.org) on macOS and keep multiple
 [tmux](https://github.com/tmux/tmux) windows. The problem: when one session
 turns idle, I know _something_ finished, but not _which window_ needs input.
 
-### OpenCode Plugins in 30 Seconds
+## OpenCode Plugins in 30 Seconds
 
 [OpenCode plugins](https://opencode.ai/docs/plugins) are small TypeScript
 modules that subscribe to OpenCode events (`session.idle`, `session.status`,
@@ -37,39 +37,37 @@ This setup solves two things at once:
 
 The end result looks like this:
 
-<figure style="max-width: 1100px; margin: 1.5rem auto; text-align: center;">
-  <div style="border: 1px solid #d0d7de; border-radius: 10px; padding: 10px; background: #0f172a;">
+<figure class="media-figure media-figure-wide">
+  <div class="media-frame media-frame-dark">
     <img
       src="{{ '/static/opencode-tmux-notification.png' | relative_url }}"
       alt="tmux status line showing the waiting marker"
-      style="display: block; width: 100%; height: auto; margin: 0 auto;"
     />
   </div>
-  <figcaption style="margin-top: 0.6rem; font-size: 0.92rem;">
+  <figcaption>
     1. tmux window list with a light ● marker on the opencode session that is waiting for input
   </figcaption>
 </figure>
 
-<figure style="max-width: 620px; margin: 1.5rem auto; text-align: center;">
-  <div style="border: 1px solid #d0d7de; border-radius: 10px; padding: 3px; background: #f8fafc;">
+<figure class="media-figure media-figure-compact">
+  <div class="media-frame media-frame-light">
     <img
       src="{{ '/static/opencode-macos-notification.png' | relative_url }}"
       alt="macOS notification for OpenCode"
-      style="display: block; width: 100%; height: auto; margin: 0 auto;"
     />
   </div>
-  <figcaption style="margin-top: 0.6rem; font-size: 0.92rem;">
+  <figcaption>
     2. popup notification with the tmux window label that needs attention
   </figcaption>
 </figure>
 
-### Plugin Walkthrough
+## Plugin Walkthrough
 
 > 💡 Full gist: [https://gist.github.com/shmileee/f8b9d0e380a53055e14fe6403c86e2cf](https://gist.github.com/shmileee/f8b9d0e380a53055e14fe6403c86e2cf)
 
 Save the plugin as `~/.config/opencode/plugins/tmux-window-notification.ts`.
 
-#### 1) Resolve the correct tmux window
+### 1) Resolve the correct tmux window
 
 The plugin pins itself to the pane where OpenCode started. Without that,
 notifications can point to whichever tmux window is currently active when the
@@ -115,7 +113,7 @@ const getWindowLabel = async (
 };
 ```
 
-#### 2) Set / clear a waiting marker in tmux
+### 2) Set / clear a waiting marker in tmux
 
 Remove the waiting marker whenever the window gains focus.
 
@@ -145,7 +143,7 @@ const setWaitingIndicator = async (
 };
 ```
 
-#### 3) Send macOS notification
+### 3) Send macOS notification
 
 You get desktop notifications when away, but no popup noise when Alacritty is
 already focused.
@@ -204,7 +202,7 @@ return {
 };
 ```
 
-### Relevant `tmux.conf` Snippet
+## Relevant `tmux.conf` Snippet
 
 ```text
 # show waiting marker in window list

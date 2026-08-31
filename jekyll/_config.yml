@@ -4,7 +4,8 @@ email: ponomarov.aleksandr@gmail.com
 description: >-
   A home for poorly researched ideas that I find myself repeating a lot anyway.
 
-baseurl: "/"
+url: "https://blog.oponomarov.com"
+baseurl: ""
 
 permalink: /posts/:title/
 

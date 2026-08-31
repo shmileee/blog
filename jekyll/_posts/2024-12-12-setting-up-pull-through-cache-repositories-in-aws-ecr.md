@@ -30,7 +30,7 @@ using Terraform for an AWS ECR that is hosted in a shared services account,
 with multiple other AWS accounts requiring access (e.g., workload EKS clusters
 pulling images from it).
 
-#### Step 1: Define Upstream Registries
+## Step 1: Define Upstream Registries
 
 First, specify the upstream registries you want to cache:
 
@@ -51,7 +51,7 @@ locals {
 > ℹ️ Note: DockerHub requires authentication. You can store credentials in AWS
 > Secrets Manager and reference them via ARN.
 
-#### Step 2: (Optional) Manage DockerHub Credentials in Secrets Manager
+## Step 2: (Optional) Manage DockerHub Credentials in Secrets Manager
 
 Create a secret in AWS Secrets Manager for DockerHub credentials. Here’s how to
 do it with a community Terraform module:
@@ -96,7 +96,7 @@ module "secrets_manager_dockerhub_credentials" {
 }
 ```
 
-#### Step 3: Configure Repository Access
+## Step 3: Configure Repository Access
 
 Allow organization-wide access to pull images. Adding `ecr:CreateRepository` is
 crucial to handle scenarios where ECR repositories may not yet exist during
@@ -137,7 +137,7 @@ locals {
 }
 ```
 
-#### Step 4: Instantiate the Repository Module
+## Step 4: Instantiate the Repository Module
 
 Finally, create the pull through cache repositories:
 
@@ -158,7 +158,7 @@ module "ecr_pull_through_caches" {
 }
 ```
 
-#### Step 5: Grant EKS Nodes Access to Pull Images
+## Step 5: Grant EKS Nodes Access to Pull Images
 
 For EKS nodes, ensure their instance profile includes the necessary permissions
 to pull images from ECR. Again, a key consideration is granting the
