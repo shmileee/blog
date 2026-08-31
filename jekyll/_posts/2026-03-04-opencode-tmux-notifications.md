@@ -1,5 +1,6 @@
 ---
 title: OpenCode + tmux Notifications for Idle Agents
+description: Mark waiting tmux windows and send quiet macOS notifications when an OpenCode agent needs attention.
 layout: post
 date: 2026-03-04 09:00:00
 categories:
@@ -38,7 +39,7 @@ This setup solves two things at once:
 The end result looks like this:
 
 <figure class="media-figure media-figure-wide">
-  <div class="media-frame media-frame-dark">
+  <div class="media-frame media-frame-dark media-frame-scroll" tabindex="0" role="region" aria-label="Scrollable tmux status-line screenshot">
     <img
       src="{{ '/static/opencode-tmux-notification.png' | relative_url }}"
       alt="tmux status line showing the waiting marker"
