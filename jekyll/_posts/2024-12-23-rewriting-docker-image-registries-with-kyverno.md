@@ -18,7 +18,7 @@ Kyverno can simplify this process.
 
 ---
 
-### What is Kyverno?
+## What is Kyverno?
 
 [Kyverno](https://kyverno.io) is a Kubernetes-native policy engine that allows you to define rules
 (policies) to validate, mutate, or generate Kubernetes configurations. It helps
@@ -63,7 +63,7 @@ See more examples and explanation [here](https://kyverno.io/docs/introduction).
 
 ---
 
-### How Kyverno Simplifies Image Registry Rewrites
+## How Kyverno Simplifies Image Registry Rewrites
 
 In a similar way, you can create a policy to modify the image registry
 dynamically. Although the official Kyverno documentation provides [_some
@@ -75,7 +75,7 @@ methods, you can achieve dynamic behavior suited to a wider range of scenarios.
 Let’s break this process into a step-by-step tutorial for building a scalable
 `ClusterPolicy`.
 
-### Step 1: Define the Bare Bones
+## Step 1: Define the Bare Bones
 
 Let’s start with a simple use case: redirecting all images pulled from the
 public DockerHub registry to a configured pull through cache repository in ECR,
@@ -160,7 +160,7 @@ missing. While not strictly required, this practice improves clarity by
 explicitly defining the image source and tag, which is helpful for debugging
 and maintenance.
 
-### Step 2: Test Your Policy in Kyverno's Playground
+## Step 2: Test Your Policy in Kyverno's Playground
 
 Before applying the policy to your cluster, use the [Kyverno
 playground](https://playground.kyverno.io) to test it against a sample manifest
@@ -207,7 +207,7 @@ pre-configured example, you can use
 [this](https://tinyurl.com/kyverno-playground) link to see the final result
 in the Playground.
 
-### Step 3: Take Other Containers Into Consideration
+## Step 3: Take Other Containers Into Consideration
 
 Per the [Kubernetes Pod
 specification](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/),
@@ -235,7 +235,7 @@ spec:
       image: public.ecr.aws/ubuntu/ubuntu:20.04
 ```
 
-### Step 4: Don't Repeat Yourself
+## Step 4: Don't Repeat Yourself
 
 Duplicating the same logic for `containers`, `initContainers`, and
 `ephemeralContainers` quickly becomes tedious and error-prone. Now, imagine
@@ -278,7 +278,7 @@ registriesToOverwrite:
 This approach allows you to easily scale and maintain policies for multiple
 registries while avoiding repetitive and error-prone configurations.
 
-### Step 5: Gradually Roll It Out
+## Step 5: Gradually Roll It Out
 
 Applying cluster-wide policies, like the one we’ve created, requires caution.
 If the regular expression is incorrect or the cluster lacks access to pull
@@ -308,7 +308,7 @@ kubectl label namespaces --all pull-through-enabled=true --overwrite
 This method ensures a controlled rollout, allowing you to verify the policy’s
 behavior before extending it cluster-wide.
 
-### Step 6: Conclusion — Drift in GitOps
+## Step 6: Conclusion — Drift in GitOps
 
 If you're using GitOps with a tool like ArgoCD, applying these policies to
 redirect container image registries will inevitably cause a drift. ArgoCD will

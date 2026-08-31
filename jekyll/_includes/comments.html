@@ -1,4 +1,8 @@
-<div id="comments"></div>
+<section class="comments-region" aria-labelledby="comments-title">
+  <p class="section-eyebrow">Discussion</p>
+  <h2 id="comments-title">Comments</h2>
+  <div id="comments"></div>
+</section>
 <script>
   function loadGiscusComments() {
       var script = document.createElement('script');
@@ -15,7 +19,7 @@
       script.setAttribute("data-reactions-enabled", "0");
       script.setAttribute("data-emit-metadata", "0");
       script.setAttribute("data-input-position", "top");
-      script.setAttribute("data-theme", "transparent_dark");
+      script.setAttribute("data-theme", document.documentElement.dataset.theme === "light" ? "light" : "transparent_dark");
       script.setAttribute("data-lang", "en");
       script.setAttribute("data-loading", "lazy");
 
@@ -31,5 +35,16 @@
   }
 
   setTimeout(loadCommentScriptOnce, 5000);
-  window.addEventListener("scroll", loadCommentScriptOnce);
+  window.addEventListener("scroll", loadCommentScriptOnce, { once: true, passive: true });
+  window.addEventListener("om-theme-change", function(event) {
+    var frame = document.querySelector("iframe.giscus-frame");
+    if (!frame) return;
+    frame.contentWindow.postMessage({
+      giscus: {
+        setConfig: {
+          theme: event.detail === "light" ? "light" : "transparent_dark"
+        }
+      }
+    }, "https://giscus.app");
+  });
 </script>

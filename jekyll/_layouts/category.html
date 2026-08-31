@@ -2,26 +2,29 @@
 layout: default
 ---
 
-<div class='post page'>
-  <h1 class='title'>{{ page.title }}</h2>
-  <p><small><i>Showing posts tagged with #{{ page.category }}</i></small></p>
-</div>
+<main id="main-content" class="page-shell">
+  <section class="category-detail" aria-labelledby="category-title">
+    <header class="detail-header">
+      <a class="back-link" href="/">← all notes</a>
+      <p class="section-eyebrow">Topic / {{ page.category }}</p>
+      <h1 id="category-title">{{ page.title }}</h1>
+      <p class="detail-summary">Notes filed under <span class="inline-topic">#{{ page.category }}</span>.</p>
+    </header>
 
-<div class='posts'>
-  <div class="post-listing">
-    <ul>
+    <ol class="article-list category-list">
       {% for post in site.posts %}
         {% if post.categories contains page.category %}
-          <li>
-            <code class="published-on">{{ post.date | date: "%d %b %Y" }}</code>
-            <a class="title" href="{{ post.url }}">{{ post.title }}</a>
-
-            {% for category in post.categories %}
-              <a href="/categories/{{ category }}/" class='category'> {{ category }} </a>
-            {% endfor %}
+          <li class="article-row">
+            <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%d %b %Y" }}</time>
+            <a class="article-title" href="{{ post.url | relative_url }}">{{ post.title }}</a>
+            <ul class="topic-list" aria-label="Topics">
+              {% for category in post.categories %}
+                <li><a href="{{ '/categories/' | append: category | append: '/' | relative_url }}">{{ category }}</a></li>
+              {% endfor %}
+            </ul>
           </li>
         {% endif %}
       {% endfor %}
-    </ul>
-  </div>
-</div>
+    </ol>
+  </section>
+</main>

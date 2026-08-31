@@ -11,7 +11,7 @@ overly loose constraints risk unexpected breakage. Here’s how to apply version
 constraints thoughtfully to ensure smooth operations across regular modules and
 root modules (aka stacks).
 
-#### Modules: Use Minimum Working & Tested Version
+## Modules: Use Minimum Working & Tested Version
 
 When defining regular modules, specify the minimum provider version that has been
 tested and confirmed to work. For example:
@@ -25,7 +25,7 @@ required_providers {
 }
 ```
 
-#### Stacks: Use Pessimistic Version Constraints with MAJOR Version Pinning
+## Stacks: Use Pessimistic Version Constraints with MAJOR Version Pinning
 
 For stacks (root modules), use the pessimistic constraint operator (`~>`) to
 pin only the major version. This ensures compatibility while allowing automatic
@@ -64,7 +64,7 @@ versions (e.g., `6.0.0`) are excluded, as they may include breaking changes.
 
 > ⚠️ In Terraform, `~> 5` is shorthand for `~> 5.x`.
 
-#### Considerations for Providers with Potential Breaking Changes
+## Considerations for Providers with Potential Breaking Changes
 
 For providers known to introduce breaking changes in minor or patch updates
 (e.g., `elastic` or some community-maintained SQL providers), adopt stricter
