@@ -1,5 +1,6 @@
 ---
 title: Demystifying ArgoCD's ApplicationSet — Pt. 2
+description: Compare five practical ways to combine ApplicationSet with Helm and Kustomize, including their tradeoffs.
 categories:
   - argocd
   - kubernetes
@@ -44,7 +45,7 @@ reference](https://argo-cd.readthedocs.io/en/latest/user-guide/application-speci
 
 ## Deployment Options for Helm and Kustomize
 
-### **Option 1: `helm` Directive With a Helm Repository**
+### Option 1: `helm` Directive With a Helm Repository
 
 This is the simplest approach for deploying services primarily provided as
 community Helm charts. Specify the chart, repository, and values directly in
@@ -68,7 +69,7 @@ spec:
             fullnameOverride: metrics-server
 ```
 
-### **Option 2: `helm` Directive with a Git Repository**
+### Option 2: `helm` Directive with a Git Repository
 
 Suitable approach for services requiring multiple Helm value files. Point to a
 Git directory containing the `Chart.yaml` and value files.
@@ -110,7 +111,7 @@ The `Chart.yaml` can reference local and remote charts under the `dependencies`
 key. You also need to remember to put the values under the respective chart's
 name as they're subcharts now.
 
-### **Option 3: Plain `kustomization.yaml`**
+### Option 3: Plain `kustomization.yaml`
 
 For resources stored directly in Git without Helm dependencies, point to a path
 within repository that contains a `kustomization.yaml` file.
@@ -130,7 +131,7 @@ spec:
 Then in `path-within-repo/example`, you'll have a simple `kustomization.yaml`
 that points to specific manifests.
 
-### **Option 4: `helmCharts` Directive in a `kustomization.yaml`**
+### Option 4: `helmCharts` Directive in a `kustomization.yaml`
 
 `kustomize` has a native support for downloading Helm chart with `helmCharts`
 directive. Read more about it
@@ -168,7 +169,7 @@ helmCharts:
     valuesFile: values.yaml
 ```
 
-### **Option 5: `kustomization.yaml` with `HelmChartInflationGenerator`**
+### Option 5: `kustomization.yaml` with `HelmChartInflationGenerator`
 
 > ⚠️ The `HelmChartInflationGenerator` has been deprecated. It is recommended to
 > use `helmCharts`, which was intended to serve as a drop-in replacement.

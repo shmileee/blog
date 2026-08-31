@@ -1,5 +1,6 @@
 ---
 title: "Mise: Faster, Smarter Tool Versioning"
+description: Keep project toolchains reproducible with mise, shared version files, directory overrides, and one-off execution.
 layout: post
 date: 2024-12-15 10:00:00
 categories:
@@ -26,53 +27,69 @@ project relies on, aligning local (and even CI) setups across contributors.
 
 ## Example Usage
 
-1. [Install `mise` itself](https://mise.jdx.dev/installing-mise.html).
+### 1. Install `mise`
 
-2. Add a `.tool-versions` file to specify your desired tools, for example:
+Follow the [official installation guide](https://mise.jdx.dev/installing-mise.html)
+for your operating system, then confirm that `mise` is available in your shell.
 
-   ```bash
-   terraform 1.9.7
-   ```
+```bash
+mise --version
+```
 
-3. Run:
+### 2. Declare the project toolchain
 
-   ```bash
-   $ mise install
-   ```
+Add a `.tool-versions` file to the repository. Each line pairs a tool with the
+version the project expects:
 
-   That’s it. Your `terraform` is now set up. Verify:
+```text
+terraform 1.9.7
+```
 
-   ```bash
-   $ which terraform
-   ~/.local/share/mise/installs/terraform/1.9.7/bin/terraform
-   ```
+### 3. Install and verify the tools
 
-4. 💡 If you have a monorepo with multiple Terraform stacks, each may require
-   slightly different version of `terraform` binary. For example, consider a
-   stack with the following requirement:
+Install everything declared by the repository:
 
-   ```hcl
-   terraform {
-      required_version = "1.9.4"
-   }
-   ```
+```bash
+mise install
+```
 
-   To contextually set the proper version for this stack, you can simply `cd`
-   into the directory and run:
+That’s it. Terraform is now available at the pinned version. Verify the binary
+that your shell resolves:
 
-   ```bash
-   $ mise use terraform@1.9.4
-   ```
+```bash
+which terraform
+```
 
-   This sets `1.9.4` as the active version for that directory. Need a
-   quick, one-off command without changing your environment permanently? Run:
+```text
+~/.local/share/mise/installs/terraform/1.9.7/bin/terraform
+```
 
-   ```bash
-   $ mise x terraform@1.9.4 -- terraform plan
-   ```
+### 4. Override a version for one directory
 
-   This executes `terraform plan` with the desired version on the fly, leaving
-   no lingering changes to your setup.
+In a monorepo, individual Terraform stacks may require different Terraform
+versions. Consider a stack with this constraint:
+
+```hcl
+terraform {
+  required_version = "1.9.4"
+}
+```
+
+From that stack’s directory, set the local version:
+
+```bash
+mise use terraform@1.9.4
+```
+
+This makes `1.9.4` active whenever you work in that directory. For a one-off
+command that does not change the directory configuration, run:
+
+```bash
+mise x terraform@1.9.4 -- terraform plan
+```
+
+The command executes `terraform plan` with the requested version and leaves no
+lingering change to your environment.
 
 ## Considerations
 

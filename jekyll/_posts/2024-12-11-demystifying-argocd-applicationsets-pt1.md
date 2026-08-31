@@ -1,5 +1,6 @@
 ---
 title: Demystifying ArgoCD's ApplicationSet — Pt. 1
+description: Learn how list, cluster, and matrix generators turn a single ApplicationSet into repeatable multi-cluster deployments.
 categories:
   - argocd
   - kubernetes
@@ -72,7 +73,7 @@ This generator provides the following parameters:
 - `name`: Cluster name in ArgoCD - the name field of the secret.
 - `server`: Server URI - the server field of the secret.
 - `metadata.labels.*`: Key/value pairs for each label of secret.
-- `metadata.labels.*`: Key/value pairs for each annotation of the secret.
+- `metadata.annotations.*`: Key/value pairs for each annotation of the secret.
 
 The `cluster` generator is a map that, by default, targets all Kubernetes
 clusters configured and managed by ArgoCD, but it also allows you to target a
@@ -207,7 +208,7 @@ spec:
 
 ---
 
-### Conclusion
+## Conclusion
 
 This post provides a concise overview of real-life use cases for the most
 common generators in ArgoCD's `ApplicationSet`. For a deeper dive into

@@ -6,16 +6,32 @@ title: hitchhiker's notes
 <main id="main-content">
   <section class="hero section-shell" aria-labelledby="page-title">
     <p class="section-eyebrow">Field notes / platform engineering</p>
-    <h1 id="page-title">hitchhiker's<br>notes<span class="hero-cursor" aria-hidden="true">_</span></h1>
+    <h1 id="page-title">hitchhiker's notes<span class="hero-cursor" aria-hidden="true"></span></h1>
     <p class="hero-lead">{{ site.description }}</p>
-    <p class="hero-meta">{{ site.posts | size }} notes · infrastructure / reliability / delivery</p>
   </section>
 
   <section class="archive section-block" id="notes" aria-labelledby="notes-title">
     <div class="section-shell archive-shell">
-      <header class="section-heading">
-        <p class="section-eyebrow">01 / Archive</p>
+      <header class="section-heading archive-heading">
         <h2 id="notes-title">All notes</h2>
+        <p class="archive-intro">Browse chronologically, or jump straight to the systems and tools you care about.</p>
+
+        <nav class="topic-directory" aria-labelledby="topic-directory-title">
+          <p class="topic-directory-label" id="topic-directory-title">Browse by topic</p>
+          <ul>
+            {% assign sorted_categories = site.categories | sort %}
+            {% for category in sorted_categories %}
+              {% assign category_name = category | first %}
+              {% assign category_posts = category | last %}
+              <li>
+                <a href="{{ '/categories/' | append: category_name | append: '/' | relative_url }}">
+                  <span>#{{ category_name }}</span>
+                  <span class="topic-directory-count" aria-label="{{ category_posts | size }} posts">{{ category_posts | size }}</span>
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </nav>
       </header>
 
       {% assign years = site.posts | group_by_exp: "post", "post.date | date: '%Y'" %}
@@ -28,13 +44,6 @@ title: hitchhiker's notes
                 <li class="article-row">
                   <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%d %b" }}</time>
                   <a class="article-title" href="{{ post.url | relative_url }}">{{ post.title }}</a>
-                  {% if post.categories %}
-                    <ul class="topic-list" aria-label="Topics">
-                      {% for category in post.categories %}
-                        <li><a href="{{ '/categories/' | append: category | append: '/' | relative_url }}">{{ category }}</a></li>
-                      {% endfor %}
-                    </ul>
-                  {% endif %}
                 </li>
               {% endfor %}
             </ol>

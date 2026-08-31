@@ -15,6 +15,7 @@
     {%- endif -%}
     {%- assign document_description = page.description | default: page.excerpt | default: site.description | strip_html | normalize_whitespace | truncate: 180 -%}
     {%- assign canonical_url = page.url | replace: 'index.html', '' | absolute_url -%}
+    {%- assign asset_version = site.time | date: '%s' -%}
     <title>{{ document_title | escape }}</title>
     <meta name="description" content="{{ document_description | escape }}">
     <link rel="canonical" href="{{ canonical_url }}">
@@ -34,24 +35,26 @@
     <meta name="twitter:creator" content="@sqrt16bit">
     <meta name="twitter:title" content="{{ document_title | escape }}">
     <meta name="twitter:description" content="{{ document_description | escape }}">
-    <link rel="stylesheet" href="/css/main.css">
-    <link rel="stylesheet" href="/css/syntax.css">
+    <link rel="stylesheet" href="/css/main.css?v={{ asset_version }}">
+    <link rel="stylesheet" href="/css/syntax.css?v={{ asset_version }}">
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="site-header" data-site-header>
+      {% if page.layout == "post" %}
       <div class="reading-progress" aria-hidden="true"><span data-reading-progress></span></div>
+      {% endif %}
       <div class="header-inner">
         <a class="brand-link" href="/" aria-label="Hitchhiker's notes home">
           <span class="brand-full">~/oleksandr-ponomarov</span>
           <span class="brand-short" aria-hidden="true">~/op</span>
         </a>
         <nav class="site-nav" aria-label="Primary navigation">
-          <a href="/"{% if page.url == '/' or page.layout == 'post' or page.layout == 'category' %} class="is-active" aria-current="page"{% endif %}>Notes</a>
+          <a href="/"{% if page.url == '/' or page.layout == 'post' or page.layout == 'category' %} class="is-active"{% endif %}{% if page.url == '/' %} aria-current="page"{% endif %}>Notes</a>
           <a href="/about/"{% if page.url == '/about/' %} class="is-active" aria-current="page"{% endif %}>About</a>
           <span class="site-nav-separator" aria-hidden="true">·</span>
-          <a href="https://portfolio.oponomarov.com/" rel="me">Portfolio <span aria-hidden="true">↗</span></a>
-          <a href="https://dotfiles.oponomarov.com/">Dotfiles <span aria-hidden="true">↗</span></a>
+          <a class="external-nav-link" href="https://portfolio.oponomarov.com/" rel="me">Portfolio {% include external_link_icon.html %}</a>
+          <a class="external-nav-link" href="https://dotfiles.oponomarov.com/">Dotfiles {% include external_link_icon.html %}</a>
           <button class="theme-toggle" type="button" aria-label="Toggle color scheme" data-theme-toggle>light</button>
         </nav>
       </div>
@@ -68,11 +71,11 @@
         </div>
         <div class="contact-links">
           <a href="{{ '/feed.xml' | relative_url }}">RSS feed</a>
-          <a href="https://github.com/shmileee" target="_blank" rel="me noreferrer">github.com/shmileee <span aria-hidden="true">↗</span></a>
-          <a href="https://www.linkedin.com/in/aleksandr-ponomarov" target="_blank" rel="me noreferrer">linkedin.com/in/aleksandr-ponomarov <span aria-hidden="true">↗</span></a>
+          <a class="external-nav-link" href="https://github.com/shmileee" target="_blank" rel="me noreferrer">github.com/shmileee {% include external_link_icon.html %}</a>
+          <a class="external-nav-link" href="https://www.linkedin.com/in/aleksandr-ponomarov" target="_blank" rel="me noreferrer">linkedin.com/in/aleksandr-ponomarov {% include external_link_icon.html %}</a>
         </div>
       </div>
     </footer>
-    <script src="{{ '/assets/js/site.js' | relative_url }}" defer></script>
+    <script src="{{ '/assets/js/site.js' | relative_url }}?v={{ asset_version }}" defer></script>
   </body>
 </html>

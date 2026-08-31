@@ -1,5 +1,6 @@
 ---
 title: "Rewriting Docker Image Registries with Kyverno"
+description: Redirect container images through approved registries with a reusable Kyverno policy and a controlled rollout.
 layout: post
 date: 2024-12-23 12:28:00
 categories:
