@@ -49,8 +49,10 @@ locals {
 }
 ```
 
-> ℹ️ Note: DockerHub requires authentication. You can store credentials in AWS
-> Secrets Manager and reference them via ARN.
+> [!NOTE] Docker Hub authentication
+>
+> Docker Hub requires authentication. You can store credentials in AWS Secrets
+> Manager and reference them by ARN.
 
 ## Step 2: (Optional) Manage DockerHub Credentials in Secrets Manager
 

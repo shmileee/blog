@@ -10,7 +10,7 @@ categories:
 ---
 
 As a continuation of [Setting Up Pull Through Cache Repositories in AWS
-ECR]({% post_url 2024-12-12-setting-up-pull-through-cache-repositories-in-aws-ecr %}),
+ECR](/blog/posts/setting-up-pull-through-cache-repositories-in-aws-ecr/),
 you might want to roll them out gradually to a live Kubernetes cluster without
 causing disruption or excessive effort. While you will eventually need to
 update your manifests to point to the correct ECR registry, scaling this across
@@ -108,7 +108,7 @@ spec:
               all:
                 # Check if the image registry is `docker.io`. Kyverno normalizes images
                 # without explicitly set registries, so `python:3.12` defaults to `docker.io`.
-                - key: '{% raw %}{{ images.containers."{{ element.name }}".registry }}{% endraw %}'
+                - key: '{{ images.containers."{{ element.name }}".registry }}'
                   operator: Equals
                   value: docker.io
             context:
@@ -128,22 +128,22 @@ spec:
               # Prepend `library/` if no repository is specified (e.g., `python:3.12`).
               - name: withDefaultRepository
                 variable:
-                  value: "{% raw %}{{ regex_replace_all('^([^/]+)$', '{{ element.image }}', 'library/$1') }}{% endraw %}"
+                  value: "{{ regex_replace_all('^([^/]+)$', '{{ element.image }}', 'library/$1') }}"
               # Normalize:
               # - Add `docker.io` as the default registry if unspecified.
               # - Add `:latest` as the default tag if unspecified.
               - name: imageNormalized
                 variable:
-                  value: "{% raw %}{{ image_normalize(withDefaultRepository) }}{% endraw %}"
+                  value: "{{ image_normalize(withDefaultRepository) }}"
               # Replace the upstream URL pattern with the ECR registry prefix.
               - name: finalImage
                 variable:
-                  value: "{% raw %}{{ regex_replace_all('{{ upstreamUrlRegexp }}', imageNormalized, '{{ ecrRegistryFullname }}/{{ ecrPrefixName }}/$1') }}{% endraw %}"
+                  value: "{{ regex_replace_all('{{ upstreamUrlRegexp }}', imageNormalized, '{{ ecrRegistryFullname }}/{{ ecrPrefixName }}/$1') }}"
             patchStrategicMerge:
               spec:
                 containers:
-                  - name: "{% raw %}{{ element.name }}{% endraw %}"
-                    image: "{% raw %}{{ finalImage }}{% endraw %}"
+                  - name: "{{ element.name }}"
+                    image: "{{ finalImage }}"
 ```
 
 This example is self-explanatory, with every step commented. Notably, Kyverno
@@ -327,9 +327,11 @@ To resolve this, you have two options:
 However, be cautious with the second approach, as ignoring updates to fields
 like images is generally discouraged.
 
-> 💡 If you're interested in learning more about `ApplicationSet` (a superset
-> controller designed for managing `Application` objects at scale), check out my
-> previous blog posts:
+> [!TIP] Learn more about ApplicationSet
 >
-> - [Demystifying ArgoCD's ApplicationSet — Pt. 1]({% post_url 2024-12-11-demystifying-argocd-applicationsets-pt1 %})
-> - [Demystifying ArgoCD's ApplicationSet — Pt. 2]({% post_url 2024-12-11-demystifying-argocd-applicationsets-pt2 %})
+> If you're interested in learning more about `ApplicationSet` (a superset
+> controller designed for managing `Application` objects at scale), read my
+> previous posts:
+>
+> - [Demystifying ArgoCD's ApplicationSet — Pt. 1](/blog/posts/demystifying-argocd-applicationsets-pt1/)
+> - [Demystifying ArgoCD's ApplicationSet — Pt. 2](/blog/posts/demystifying-argocd-applicationsets-pt2/)

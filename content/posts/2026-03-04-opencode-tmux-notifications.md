@@ -41,7 +41,7 @@ The end result looks like this:
 <figure class="media-figure media-figure-wide">
   <div class="media-frame media-frame-dark media-frame-scroll" tabindex="0" role="region" aria-label="Scrollable tmux status-line screenshot">
     <img
-      src="{{ '/static/opencode-tmux-notification.png' | relative_url }}"
+      src="/blog-static/opencode-tmux-notification.png"
       alt="tmux status line showing the waiting marker"
     />
   </div>
@@ -53,7 +53,7 @@ The end result looks like this:
 <figure class="media-figure media-figure-compact">
   <div class="media-frame media-frame-light">
     <img
-      src="{{ '/static/opencode-macos-notification.png' | relative_url }}"
+      src="/blog-static/opencode-macos-notification.png"
       alt="macOS notification for OpenCode"
     />
   </div>
@@ -64,7 +64,9 @@ The end result looks like this:
 
 ## Plugin Walkthrough
 
-> 💡 Full gist: [https://gist.github.com/shmileee/f8b9d0e380a53055e14fe6403c86e2cf](https://gist.github.com/shmileee/f8b9d0e380a53055e14fe6403c86e2cf)
+> [!TIP] Complete example
+>
+> See the [full configuration gist](https://gist.github.com/shmileee/f8b9d0e380a53055e14fe6403c86e2cf).
 
 Save the plugin as `~/.config/opencode/plugins/tmux-window-notification.ts`.
 
