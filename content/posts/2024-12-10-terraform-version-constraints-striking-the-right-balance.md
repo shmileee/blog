@@ -63,7 +63,9 @@ versions (e.g., `6.0.0`) are excluded, as they may include breaking changes.
 - Renovate or similar tools will not suggest updates outside the specified
   major version.
 
-> ⚠️ In Terraform, `~> 5` is shorthand for `~> 5.x`.
+> [!WARNING] Version constraint shorthand
+>
+> In Terraform, `~> 5` is shorthand for `~> 5.x`.
 
 ## Considerations for Providers with Potential Breaking Changes
 

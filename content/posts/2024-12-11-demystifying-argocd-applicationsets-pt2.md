@@ -8,8 +8,7 @@ layout: post
 date: 2024-12-11 11:00:00
 ---
 
-In the [previous]({% post_url
-2024-12-11-demystifying-argocd-applicationsets-pt1 %}) post, I covered the most
+In the [previous](/blog/posts/demystifying-argocd-applicationsets-pt1/) post, I covered the most
 common generators for `ApplicationSet`. These generators primarily produce
 variables used in the `.spec.template.spec.source` configuration, which defines
 how ArgoCD retrieves and processes Kubernetes manifests.
@@ -92,7 +91,7 @@ spec:
         helm:
           valueFiles:
             - common-values.yaml
-            - "{% raw %}{{ metadata.labels.env }}-values.yaml{% endraw %}"
+            - "{{ metadata.labels.env }}-values.yaml"
 ```
 
 **`Chart.yaml` example**:
@@ -171,7 +170,9 @@ helmCharts:
 
 ### Option 5: `kustomization.yaml` with `HelmChartInflationGenerator`
 
-> ⚠️ The `HelmChartInflationGenerator` has been deprecated. It is recommended to
+> [!WARNING] Deprecated generator
+>
+> The `HelmChartInflationGenerator` has been deprecated. It is recommended to
 > use `helmCharts`, which was intended to serve as a drop-in replacement.
 > However, as of today, it still lacks the full flexibility of its predecessor.
 

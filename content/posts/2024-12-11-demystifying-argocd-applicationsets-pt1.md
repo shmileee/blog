@@ -55,9 +55,9 @@ spec:
       source:
         helm:
           valueFiles:
-            - "{% raw %}{{ appName }}-values.yaml{% endraw %}"
+            - "{{ appName }}-values.yaml"
       destination:
-        namespace: "{% raw %}{{ namespace }}{% endraw %}"
+        namespace: "{{ namespace }}"
 ```
 
 ### Generator: `cluster`
@@ -100,9 +100,9 @@ spec:
       source:
         helm:
           valueFiles:
-            - "{% raw %}{{ metadata.labels.env }}-values.yaml{% endraw %}"
+            - "{{ metadata.labels.env }}-values.yaml"
       destination:
-        server: "{% raw %}{{ server }}{% endraw %}"
+        server: "{{ server }}"
 ```
 
 ### Generator: `matrix`
@@ -133,12 +133,12 @@ spec:
                   name: in-cluster
   template:
     metadata:
-      name: "{% raw %}application-{{ appName }}{% endraw %}"
+      name: "application-{{ appName }}"
     spec:
       source:
-        path: "{% raw %}path-within-repo/kustomize/overlays/{{ appName }}{% endraw %}"
+        path: "path-within-repo/kustomize/overlays/{{ appName }}"
       destination:
-        server: "{% raw %}{{ server }}{% endraw %}"
+        server: "{{ server }}"
 ```
 
 ## Real Life Examples
@@ -188,22 +188,22 @@ spec:
                   - key: environment
                     operator: In
                     values:
-                      - "{% raw %}{{ environment }}{% endraw %}"
+                      - "{{ environment }}"
                   - key: name
                     operator: In
                     values:
                       - "in-cluster"
   template:
     metadata:
-      name: "{% raw %}elasticsearch-exporter-{{ clusterName }}{% endraw %}"
+      name: "elasticsearch-exporter-{{ clusterName }}"
     spec:
       source:
         repoURL: git@github.com:org/repo.git
-        targetRevision: "{% raw %}{{ revision }}{% endraw %}"
-        path: "{% raw %}clusters/elasticsearch-exporter/overlays/{{ clusterName }}{% endraw %}"
+        targetRevision: "{{ revision }}"
+        path: "clusters/elasticsearch-exporter/overlays/{{ clusterName }}"
       destination:
-        server: "{% raw %}{{ server }}{% endraw %}"
-        namespace: "{% raw %}{{ clusterNamespace }}{% endraw %}"
+        server: "{{ server }}"
+        namespace: "{{ clusterNamespace }}"
 ```
 
 ---
@@ -214,5 +214,4 @@ This post provides a concise overview of real-life use cases for the most
 common generators in ArgoCD's `ApplicationSet`. For a deeper dive into
 practical examples and detailed options on leveraging variables produced by
 these generators, particularly when configuring the `.source` field for
-manifests, check out [this]({% post_url
-2024-12-11-demystifying-argocd-applicationsets-pt2 %}) post.
+manifests, check out [this](/blog/posts/demystifying-argocd-applicationsets-pt2/) post.
