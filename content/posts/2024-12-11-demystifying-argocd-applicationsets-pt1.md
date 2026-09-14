@@ -1,11 +1,10 @@
 ---
 title: Demystifying ArgoCD's ApplicationSet — Pt. 1
 description: Learn how list, cluster, and matrix generators turn a single ApplicationSet into repeatable multi-cluster deployments.
+date: 2024-12-11 10:30:00
 categories:
   - argocd
   - kubernetes
-layout: post
-date: 2024-12-11 10:30:00
 ---
 
 `ApplicationSet` is a custom resource (CR) that describes how to create a set

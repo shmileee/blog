@@ -1,5 +1,4 @@
 ---
-layout: post
 title: "Save Yourself From Formatting Hell"
 description: Automate Markdown formatting and linting with pre-commit so reviews stay focused on meaningful changes.
 date: 2024-12-08 12:00:29 +0100

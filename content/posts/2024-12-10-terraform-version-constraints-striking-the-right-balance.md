@@ -1,9 +1,9 @@
 ---
 title: Terraform Version Constraints — Striking the Right Balance
 description: A practical provider-version policy for reusable Terraform modules and the stacks that consume them.
-categories: terraform
-layout: post
 date: 2024-12-10
+categories:
+  - terraform
 ---
 
 Managing provider versions in Terraform is an exercise in balancing stability

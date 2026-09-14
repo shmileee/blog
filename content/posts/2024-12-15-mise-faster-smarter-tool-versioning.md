@@ -1,7 +1,6 @@
 ---
 title: "Mise: Faster, Smarter Tool Versioning"
 description: Keep project toolchains reproducible with mise, shared version files, directory overrides, and one-off execution.
-layout: post
 date: 2024-12-15 10:00:00
 categories:
   - developer-tools

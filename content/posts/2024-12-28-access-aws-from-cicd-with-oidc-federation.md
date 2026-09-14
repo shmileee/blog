@@ -1,9 +1,9 @@
 ---
 title: Access AWS From CI/CD With OIDC Federation
 description: Replace long-lived AWS keys with short-lived OIDC federation for GitHub Actions and CircleCI workflows.
-categories: aws
-layout: post
 date: 2024-12-28 15:00:00
+categories:
+  - aws
 ---
 
 As your CI/CD workflows evolve, they will inevitably require access to cloud

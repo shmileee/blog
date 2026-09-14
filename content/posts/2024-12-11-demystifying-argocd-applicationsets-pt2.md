@@ -1,11 +1,10 @@
 ---
 title: Demystifying ArgoCD's ApplicationSet — Pt. 2
 description: Compare five practical ways to combine ApplicationSet with Helm and Kustomize, including their tradeoffs.
+date: 2024-12-11 11:00:00
 categories:
   - argocd
   - kubernetes
-layout: post
-date: 2024-12-11 11:00:00
 ---
 
 In the [previous](/blog/posts/demystifying-argocd-applicationsets-pt1/) post, I covered the most

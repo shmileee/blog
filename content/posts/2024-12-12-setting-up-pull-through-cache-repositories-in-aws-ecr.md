@@ -1,11 +1,10 @@
 ---
 title: Setting Up Pull Through Cache Repositories in AWS ECR
 description: Build organization-wide ECR pull-through caches with Terraform, authenticated upstreams, and safe EKS access.
+date: 2024-12-12 08:00:00
 categories:
   - aws
   - terraform
-layout: post
-date: 2024-12-12 08:00:00
 ---
 
 A pull through cache repository acts as a proxy of an upstream Docker registry.
