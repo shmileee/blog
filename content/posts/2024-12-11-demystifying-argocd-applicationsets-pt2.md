@@ -1,5 +1,5 @@
 ---
-title: Demystifying ArgoCD's ApplicationSet — Pt. 2
+title: Demystifying ArgoCD's ApplicationSet — part 2
 description: Compare five practical ways to combine ApplicationSet with Helm and Kustomize, including their tradeoffs.
 date: 2024-12-11 11:00:00
 categories:
@@ -41,9 +41,9 @@ reference](https://argo-cd.readthedocs.io/en/latest/user-guide/application-speci
 
 ---
 
-## Deployment Options for Helm and Kustomize
+## Deployment options for Helm and Kustomize
 
-### Option 1: `helm` Directive With a Helm Repository
+### Option 1: `helm` directive with a Helm repository
 
 This is the simplest approach for deploying services primarily provided as
 community Helm charts. Specify the chart, repository, and values directly in
@@ -67,7 +67,7 @@ spec:
             fullnameOverride: metrics-server
 ```
 
-### Option 2: `helm` Directive with a Git Repository
+### Option 2: `helm` directive with a Git repository
 
 Suitable approach for services requiring multiple Helm value files. Point to a
 Git directory containing the `Chart.yaml` and value files.
@@ -109,7 +109,7 @@ The `Chart.yaml` can reference local and remote charts under the `dependencies`
 key. You also need to remember to put the values under the respective chart's
 name as they're subcharts now.
 
-### Option 3: Plain `kustomization.yaml`
+### Option 3: plain `kustomization.yaml`
 
 For resources stored directly in Git without Helm dependencies, point to a path
 within repository that contains a `kustomization.yaml` file.
@@ -129,7 +129,7 @@ spec:
 Then in `path-within-repo/example`, you'll have a simple `kustomization.yaml`
 that points to specific manifests.
 
-### Option 4: `helmCharts` Directive in a `kustomization.yaml`
+### Option 4: `helmCharts` directive in a `kustomization.yaml`
 
 `kustomize` has a native support for downloading Helm chart with `helmCharts`
 directive. Read more about it

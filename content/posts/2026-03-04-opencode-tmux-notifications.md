@@ -1,5 +1,5 @@
 ---
-title: OpenCode + tmux Notifications for Idle Agents
+title: OpenCode + tmux notifications for idle agents
 description: Mark waiting tmux windows and send quiet macOS notifications when an OpenCode agent needs attention.
 date: 2026-03-04 09:00:00
 categories:
@@ -24,7 +24,7 @@ I use [Alacritty](https://alacritty.org) on macOS and keep multiple
 [tmux](https://github.com/tmux/tmux) windows. The problem: when one session
 turns idle, I know _something_ finished, but not _which window_ needs input.
 
-## OpenCode Plugins in 30 Seconds
+## OpenCode plugins in 30 seconds
 
 [OpenCode plugins](https://opencode.ai/docs/plugins) are small TypeScript
 modules that subscribe to OpenCode events (`session.idle`, `session.status`,
@@ -65,7 +65,7 @@ The end result looks like this:
   </figcaption>
 </figure>
 
-## Plugin Walkthrough
+## Plugin walkthrough
 
 > [!TIP] Complete example
 >
@@ -208,7 +208,7 @@ return {
 };
 ```
 
-## Relevant `tmux.conf` Snippet
+## Relevant `tmux.conf` snippet
 
 ```text
 # show waiting marker in window list

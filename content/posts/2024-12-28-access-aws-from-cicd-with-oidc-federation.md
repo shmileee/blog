@@ -1,5 +1,5 @@
 ---
-title: Access AWS From CI/CD With OIDC Federation
+title: Access AWS from CI/CD with OIDC federation
 description: Replace long-lived AWS keys with short-lived OIDC federation for GitHub Actions and CircleCI workflows.
 date: 2024-12-28 15:00:00
 categories:
@@ -34,7 +34,7 @@ CircleCI, using Terraform.
 
 ## GitHub Actions
 
-### Configure OIDC Provider
+### Configure the OIDC provider
 
 Based on the [official GitHub documentation for configuring OpenID Connect in
 AWS](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services),
@@ -56,7 +56,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 ```
 
-### Create an IAM Role With Required Access
+### Create an IAM role with the required access
 
 Define an assume role policy that grants access to yet to be created IAM role
 for designated repositories within a specified GitHub organization, restricted
@@ -113,7 +113,7 @@ resource "aws_iam_role_policy_attachment" "github_actions_s3_access" {
 }
 ```
 
-### Use the Role in Github Actions
+### Use the role in GitHub Actions
 
 ```yaml
 ---
@@ -147,7 +147,7 @@ your actual values.
 
 ## CircleCI
 
-### Configure OIDC Provider
+### Configure the OIDC provider
 
 For CircleCI, the OIDC URL is configured differently and depends on your
 organization ID. The URL is `https://oidc.circleci.com/org/<organization_id>`,
@@ -171,7 +171,7 @@ resource "aws_iam_openid_connect_provider" "circleci" {
 }
 ```
 
-### Create an IAM Role With Required Access
+### Create an IAM role with the required access
 
 Define an assume role policy that grants access to yet to be created IAM role
 for all projects in an entire CircleCI organization:
@@ -227,7 +227,7 @@ resource "aws_iam_role_policy_attachment" "circleci_s3_access" {
 }
 ```
 
-### Use the Role in CircleCI
+### Use the role in CircleCI
 
 ```yaml
 version: 2.1

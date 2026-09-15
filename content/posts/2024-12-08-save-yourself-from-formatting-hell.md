@@ -1,5 +1,5 @@
 ---
-title: "Save Yourself From Formatting Hell"
+title: "Save yourself from formatting hell"
 description: Automate Markdown formatting and linting with pre-commit so reviews stay focused on meaningful changes.
 date: 2024-12-08 12:00:29 +0100
 categories:
@@ -26,7 +26,7 @@ centralized place to declare all the formatting and linting rules you want to
 run before every commit. Instead of remembering to manually run `markdownlint`
 or `prettier` (or any number of tools), `pre-commit` does it for you.
 
-## Why Bother?
+## Why bother?
 
 1. **Consistency:** You might think you’ll remember to run your formatters
    every time, but you won’t. Humans are lazy, and that’s good. Offload the
@@ -41,7 +41,7 @@ or `prettier` (or any number of tools), `pre-commit` does it for you.
    any commit even gets made. It’s a subtle gift to your future self and your
    colleagues.
 
-## Getting Started
+## Getting started
 
 If you haven’t tried it out, installing and using `pre-commit` is
 straightforward:
@@ -78,7 +78,7 @@ From now on, whenever you commit changes to your `.md` files, `pre-commit` will
 auto-format them and lint them. If something’s off, it’ll fix it or block the
 commit until you fix it.
 
-## Don’t Overcomplicate It
+## Don’t overcomplicate it
 
 One nice aspect of `pre-commit` is that you can start small. Add a simple
 formatter hook. Once you trust it, add a linter. Over time you might expand to

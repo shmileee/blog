@@ -1,5 +1,5 @@
 ---
-title: "Mise: Faster, Smarter Tool Versioning"
+title: "Mise: faster, smarter tool versioning"
 description: Keep project toolchains reproducible with mise, shared version files, directory overrides, and one-off execution.
 date: 2024-12-15 10:00:00
 categories:
@@ -13,7 +13,7 @@ a single `.tool-versions` file. Now, `mise`
 ([mise.jdx.dev](https://mise.jdx.dev)) steps in as a faster, more robust
 successor, providing a snappier experience and more powerful commands.
 
-## What Is `mise`?
+## What is `mise`?
 
 It is a tool written in Rust that manages and installs language runtimes and
 binaries according to specifications listed in `.tool-versions`. Think of
@@ -24,7 +24,7 @@ read it, so you can maintain compatibility and ease the transition.
 With `mise`, a single command can quickly install or update every tool your
 project relies on, aligning local (and even CI) setups across contributors.
 
-## Example Usage
+## Example usage
 
 ### 1. Install `mise`
 

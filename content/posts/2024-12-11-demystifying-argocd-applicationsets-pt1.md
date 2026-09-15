@@ -1,5 +1,5 @@
 ---
-title: Demystifying ArgoCD's ApplicationSet — Pt. 1
+title: Demystifying ArgoCD's ApplicationSet — part 1
 description: Learn how list, cluster, and matrix generators turn a single ApplicationSet into repeatable multi-cluster deployments.
 date: 2024-12-11 10:30:00
 categories:
@@ -140,7 +140,7 @@ spec:
         server: "{{ server }}"
 ```
 
-## Real Life Examples
+## Real-life examples
 
 Once you’re familiar with these three commonly used generators, you can combine
 them to create various input permutations, enabling efficient management of
