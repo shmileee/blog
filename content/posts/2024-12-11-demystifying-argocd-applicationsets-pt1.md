@@ -1,5 +1,5 @@
 ---
-title: Demystifying ArgoCD's ApplicationSet — part 1
+title: Demystifying Argo CD’s ApplicationSet — part 1
 description: Learn how list, cluster, and matrix generators turn a single ApplicationSet into repeatable multi-cluster deployments.
 date: 2024-12-11 10:30:00
 categories:
@@ -17,7 +17,7 @@ of truth through a variety of
 
 Generators are a cornerstone of `ApplicationSet`, enabling the dynamic creation
 of `Application` resources based on various inputs. A wide range of generators
-is available, each designed to serve specific use cases, with the ArgoCD
+is available, each designed to serve specific use cases, with the Argo CD
 maintainers continuously expanding the list. Each generator comes with its own
 unique interface and supported options. Notably, the `matrix` generator allows
 you to combine the parameters produced by two separate generators, adding even
@@ -61,7 +61,7 @@ spec:
 
 ### Generator: `cluster`
 
-Allows you to target Kubernetes clusters configured and managed by ArgoCD.
+Allows you to target Kubernetes clusters configured and managed by Argo CD.
 Since the clusters are configured through native Kubernetes secrets (object of
 `kind: Secrets`) with `argocd.argoproj.io/secret-type: cluster` annotation, the
 `ApplicationSet` controller will parse these secrets to generate parameters for
@@ -69,15 +69,15 @@ each cluster.
 
 This generator provides the following parameters:
 
-- `name`: Cluster name in ArgoCD - the name field of the secret.
-- `server`: Server URI - the server field of the secret.
+- `name`: Cluster name in Argo CD — the name field of the secret.
+- `server`: Server URI — the server field of the secret.
 - `metadata.labels.*`: Key/value pairs for each label of secret.
 - `metadata.annotations.*`: Key/value pairs for each annotation of the secret.
 
 The `cluster` generator is a map that, by default, targets all Kubernetes
-clusters configured and managed by ArgoCD, but it also allows you to target a
+clusters configured and managed by Argo CD, but it also allows you to target a
 specific cluster using a selector, such as label. The `in-cluster` label in the
-example below basically means "_the current cluster where ArgoCD is running_".
+example below basically means "_the current cluster where Argo CD is running_".
 
 **Example:**
 
@@ -210,7 +210,7 @@ spec:
 ## Conclusion
 
 This post provides a concise overview of real-life use cases for the most
-common generators in ArgoCD's `ApplicationSet`. For a deeper dive into
+common generators in Argo CD’s `ApplicationSet`. For a deeper dive into
 practical examples and detailed options on leveraging variables produced by
 these generators, particularly when configuring the `.source` field for
-manifests, check out [this](/blog/posts/demystifying-argocd-applicationsets-pt2/) post.
+manifests, read [part 2 of this series](/blog/posts/demystifying-argocd-applicationsets-pt2/).

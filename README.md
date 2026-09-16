@@ -22,7 +22,7 @@ YAML frontmatter validated by the engine's `posts` collection schema:
 | `title`       | string                       | Post title                              |
 | `description` | string                       | One-line summary used for meta and RSS  |
 | `date`        | date (`YYYY-MM-DD HH:MM:SS`) | Publication timestamp                   |
-| `categories`  | string or list of strings    | Category archive membership             |
+| `categories`  | string or list of strings    | Category archive membership, as slugs (`argocd`, `developer-tools`); the engine shows display names (Argo CD, Developer tools) |
 
 Post bodies are Astro-flavored Markdown; GitHub-style callout blockquotes (`> [!NOTE]` etc.) render as semantic admonitions.
 

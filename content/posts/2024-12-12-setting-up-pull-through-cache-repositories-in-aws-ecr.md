@@ -17,8 +17,8 @@ There are several reasons to use it:
   temporarily unavailable, a cache repository ensures images are still
   accessible, mitigating potential disruptions.
 - **Cost Efficiency:** Frequently pulling public images, especially from
-  registries like DockerHub, can lead to additional costs or restrictions.
-  DockerHub, for instance, imposes rate limits on the number of pulls per day,
+  registries like Docker Hub, can lead to additional costs or restrictions.
+  Docker Hub, for instance, imposes rate limits on the number of pulls per day,
   which can become problematic in dynamic environments like Kubernetes clusters
   where deployments may restart or reschedule frequently, triggering repeated
   image pulls.
@@ -53,9 +53,9 @@ locals {
 > Docker Hub requires authentication. You can store credentials in AWS Secrets
 > Manager and reference them by ARN.
 
-## Step 2 (optional): manage DockerHub credentials in Secrets Manager
+## Step 2 (optional): manage Docker Hub credentials in Secrets Manager
 
-Create a secret in AWS Secrets Manager for DockerHub credentials. Here’s how to
+Create a secret in AWS Secrets Manager for Docker Hub credentials. Here’s how to
 do it with a community Terraform module:
 
 ```hcl

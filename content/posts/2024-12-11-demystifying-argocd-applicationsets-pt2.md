@@ -1,5 +1,5 @@
 ---
-title: Demystifying ArgoCD's ApplicationSet — part 2
+title: Demystifying Argo CD’s ApplicationSet — part 2
 description: Compare five practical ways to combine ApplicationSet with Helm and Kustomize, including their tradeoffs.
 date: 2024-12-11 11:00:00
 categories:
@@ -10,7 +10,7 @@ categories:
 In the [previous](/blog/posts/demystifying-argocd-applicationsets-pt1/) post, I covered the most
 common generators for `ApplicationSet`. These generators primarily produce
 variables used in the `.spec.template.spec.source` configuration, which defines
-how ArgoCD retrieves and processes Kubernetes manifests.
+how Argo CD retrieves and processes Kubernetes manifests.
 
 However, the `.source` field can be ambiguous for newcomers, so let’s break it
 down briefly -- below is a simplified decluttered summary of its supported
@@ -132,8 +132,7 @@ that points to specific manifests.
 ### Option 4: `helmCharts` directive in a `kustomization.yaml`
 
 `kustomize` has a native support for downloading Helm chart with `helmCharts`
-directive. Read more about it
-[here](https://cloud.google.com/kubernetes-engine/enterprise/config-sync/docs/tutorials/config-sync-helm).
+directive; Google's [Config Sync tutorial on Helm charts](https://cloud.google.com/kubernetes-engine/enterprise/config-sync/docs/tutorials/config-sync-helm) walks through it.
 
 This approach is best suited for a deployment that is shared as a Helm chart,
 where you do **NOT** have a requirement for having multiple Helm value files,

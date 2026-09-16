@@ -59,7 +59,7 @@ spec:
             value: "default"
 ```
 
-See more examples and explanation [here](https://kyverno.io/docs/introduction).
+The [Kyverno introduction](https://kyverno.io/docs/introduction) has more examples and explanation.
 
 ---
 
@@ -78,8 +78,8 @@ Let’s break this process into a step-by-step tutorial for building a scalable
 ## Step 1: define the bare bones
 
 Let’s start with a simple use case: redirecting all images pulled from the
-public DockerHub registry to a configured pull through cache repository in ECR,
-specifically for DockerHub.
+public Docker Hub registry to a configured pull through cache repository in ECR,
+specifically for Docker Hub.
 
 ```yaml
 apiVersion: kyverno.io/v1
@@ -147,7 +147,7 @@ spec:
 
 This example is self-explanatory, with every step commented. Notably, Kyverno
 simplifies certain tasks, such as exposing information about the default
-registry (`docker.io`) when none is specified. Handling images from DockerHub
+registry (`docker.io`) when none is specified. Handling images from Docker Hub
 can be tricky, as images without a specified repository (e.g., `python:3.12`)
 default to the `library` prefix when pulled. While it’s a good habit to
 explicitly include the `library` prefix manifests, Kyverno’s mutating
@@ -199,13 +199,12 @@ and visualize the mutation results.
 
 4. Click the **Details** hyperlink to open a diff view, showing the manifest
    before and after the policy was applied. In this case, only images
-   originating from DockerHub will show updates to their
+   originating from Docker Hub will show updates to their
    `.spec.containers[].image` fields.
 
 If you encounter any issues, get stuck, or simply want to explore a
-pre-configured example, you can use
-[this](https://tinyurl.com/kyverno-playground) link to see the final result
-in the Playground.
+pre-configured example, open [the finished policy in the Kyverno
+Playground](https://tinyurl.com/kyverno-playground).
 
 ## Step 3: take other containers into consideration
 
@@ -310,16 +309,16 @@ behavior before extending it cluster-wide.
 
 ## Step 6: conclusion — drift in GitOps
 
-If you're using GitOps with a tool like ArgoCD, applying these policies to
-redirect container image registries will inevitably cause a drift. ArgoCD will
+If you're using GitOps with a tool like Argo CD, applying these policies to
+redirect container image registries will inevitably cause a drift. Argo CD will
 flag your `Application` objects as out of sync because the live state no longer
 matches the raw manifests in your Git repository.
 
 To resolve this, you have two options:
 
 1. Update the manifests to reflect the new registry.
-2. Configure ArgoCD to ignore changes to the `.spec.containers[].images` field.
-   Refer to [ArgoCD – Diffing – Diffing Customization – Application Level
+2. Configure Argo CD to ignore changes to the `.spec.containers[].images` field.
+   Refer to [Argo CD – Diffing – Diffing Customization – Application Level
    Configuration](https://argo-cd.readthedocs.io/en/stable/user-guide/diffing/#application-level-configuration)
    for guidance.
 
@@ -332,5 +331,5 @@ like images is generally discouraged.
 > controller designed for managing `Application` objects at scale), read my
 > previous posts:
 >
-> - [Demystifying ArgoCD's ApplicationSet — part 1](/blog/posts/demystifying-argocd-applicationsets-pt1/)
-> - [Demystifying ArgoCD's ApplicationSet — part 2](/blog/posts/demystifying-argocd-applicationsets-pt2/)
+> - [Demystifying Argo CD’s ApplicationSet — part 1](/blog/posts/demystifying-argocd-applicationsets-pt1/)
+> - [Demystifying Argo CD’s ApplicationSet — part 2](/blog/posts/demystifying-argocd-applicationsets-pt2/)

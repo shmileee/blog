@@ -73,7 +73,7 @@ The end result looks like this:
 
 Save the plugin as `~/.config/opencode/plugins/tmux-window-notification.ts`.
 
-### 1) Resolve the correct tmux window
+### 1. Resolve the correct tmux window
 
 The plugin pins itself to the pane where OpenCode started. Without that,
 notifications can point to whichever tmux window is currently active when the
@@ -119,7 +119,7 @@ const getWindowLabel = async (
 };
 ```
 
-### 2) Set / clear a waiting marker in tmux
+### 2. Set or clear a waiting marker in tmux
 
 Remove the waiting marker whenever the window gains focus.
 
@@ -149,7 +149,7 @@ const setWaitingIndicator = async (
 };
 ```
 
-### 3) Send macOS notification
+### 3. Send a macOS notification
 
 You get desktop notifications when away, but no popup noise when Alacritty is
 already focused.
