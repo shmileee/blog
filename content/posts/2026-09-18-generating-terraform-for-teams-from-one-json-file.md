@@ -24,7 +24,7 @@ account-and-region hierarchy the rest of the repository uses rather than inside
 it, because a team is not a thing that belongs to one AWS account.
 
 Every transcript below came out of a two-team scratch repository, exercised with
-Terramate 0.17.2, Terraform 1.15.8 and
+Terramate 0.17.3, Terraform 1.15.8 and
 [check-jsonschema](https://github.com/python-jsonschema/check-jsonschema) 0.38.
 The platform names are generic; the repository this pattern comes from carries a
 few dozen team directories.

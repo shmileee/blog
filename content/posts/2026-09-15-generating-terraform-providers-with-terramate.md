@@ -24,7 +24,7 @@ credential plumbing are all derived from that declaration.
 
 The layout assumed throughout is `stacks/aws/<account-alias>/<region>/<stack>`,
 with Terramate globals declared at each level and inherited downward. Everything
-below was tested with Terramate 0.17.2 and Terraform 1.15.8. The snippets come
+below was tested with Terramate 0.17.3 and Terraform 1.15.8. The snippets come
 from a minimal reproduction of a pattern that runs in a private repository, so
 account names, profiles and secret paths are placeholders.
 

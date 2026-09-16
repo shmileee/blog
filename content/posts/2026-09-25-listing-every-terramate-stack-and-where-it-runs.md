@@ -98,7 +98,8 @@ entries, err := stack.List(root, root.Tree())
 
 for _, e := range entries {
     g := globals.ForStack(root, e.Stack)
-    fmt.Println(e.Stack.Dir, str(g.Globals, "account_name"), str(g.Globals, "environment"))
+    fmt.Println(e.Stack.Dir,
+        str(g.Globals, "account_name"), str(g.Globals, "environment"))
 }
 ```
 

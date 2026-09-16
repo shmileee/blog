@@ -73,7 +73,8 @@ anything is copied into it:
 ```bash
 cd stacks/aws/<account-folder>/<region>
 terramate create <stack-name>
-git mv app/<stack-name>/<env>/main.tf stacks/aws/<account-folder>/<region>/<stack-name>/main.tf
+git mv app/<stack-name>/<env>/main.tf \
+  stacks/aws/<account-folder>/<region>/<stack-name>/main.tf
 ```
 
 Then the moved file is edited down. The root `provider "aws"` block comes out,
@@ -87,14 +88,16 @@ Terramate-generated one, guarded on both sides:
 
 ```bash
 # 1. the legacy object exists
-aws s3api head-object --bucket <legacy-bucket> --key <legacy-key> --profile <profile>
+aws s3api head-object --profile <profile> \
+  --bucket <legacy-bucket> --key <legacy-key>
 
 # 2. the new key is still empty (if not, back it up first)
-aws s3api head-object --bucket <new-bucket> --key <new-key> --profile <profile>
+aws s3api head-object --profile <profile> \
+  --bucket <new-bucket> --key <new-key>
 
 # 3. copy, never move
-aws s3api copy-object --bucket <new-bucket> \
-  --copy-source <legacy-bucket>/<legacy-key> --key <new-key> --profile <profile>
+aws s3api copy-object --profile <profile> --bucket <new-bucket> \
+  --copy-source <legacy-bucket>/<legacy-key> --key <new-key>
 ```
 
 Copying rather than moving is what makes the migration reversible. The legacy

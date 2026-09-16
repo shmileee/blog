@@ -21,7 +21,7 @@ and the only hand-written file in the new directory is the one that calls
 modules.
 
 The commands below were run against a scratch repository built for this post
-with Terramate 0.17.2 and Terraform 1.15.8. The layout itself comes from a
+with Terramate 0.17.3 and Terraform 1.15.8. The layout itself comes from a
 private monorepo of 508 stacks and 95 modules, so account names and profiles
 are placeholders.
 
@@ -146,7 +146,7 @@ terramate generate
 
 grep -E 'bucket|key ' stacks/aws/acme-production/eu-west-1/acm-v2/000*.tf
 #     bucket         = "tf-state-euw1-222222222222"
-#     key            = "terraform/stacks/by-id/a55dd02a-628e-4dc6-89a7-2fb83537a9c2/terraform.tfstate"
+#     key            = "terraform/stacks/by-id/<stack-id>/terraform.tfstate"
 ```
 
 The bucket, the AWS profile and the environment tag all follow the new path.
@@ -237,7 +237,9 @@ every command that reads stacks fails on it, `generate` included:
 
 ```text
 terramate list
-# Error: listing changed stacks error: searching for stacks: validating stack fields: "stack.id" "{{cookiecutter.stack_id}}" doesn't match "^[a-zA-Z0-9_-]{1,64}$"
+# Error: listing changed stacks error: searching for stacks:
+#   validating stack fields: "stack.id" "{{cookiecutter.stack_id}}"
+#   doesn't match "^[a-zA-Z0-9_-]{1,64}$"
 ```
 
 An empty `.tmskip` file in `templates/` takes the directory out of the walk and
