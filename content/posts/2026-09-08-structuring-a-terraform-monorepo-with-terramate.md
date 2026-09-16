@@ -1,6 +1,6 @@
 ---
-title: Structuring a Terraform Monorepo With Terramate
-description: A Terramate monorepo layout where a stack's path supplies its account, region and environment.
+title: Structuring a Terraform monorepo with Terramate
+description: A Terramate monorepo layout where a stack’s path supplies its account, region and environment.
 date: 2026-09-08 09:00:00
 categories:
   - terraform
@@ -8,7 +8,7 @@ categories:
 ---
 
 A repository layout for a Terraform monorepo managed with
-[**Terramate**](https://terramate.io/docs/cli/), where a stack's position in the
+[**Terramate**](https://terramate.io/docs/cli/), where a stack’s position in the
 tree supplies its account, its region and its environment. It covers the three
 directories that carry code, what a single stack directory holds, how change
 detection reads the layout, and the conventions that keep a tree of several
@@ -25,7 +25,7 @@ with Terramate 0.17.2 and Terraform 1.15.8. The layout itself comes from a
 private monorepo of 508 stacks and 95 modules, so account names and profiles
 are placeholders.
 
-## The Layout Problem
+## The layout problem
 
 The default layout for multi-account Terraform is a directory per environment
 with the same files copied into each: `development/`, `staging/` and
@@ -48,12 +48,12 @@ whatever `git diff --name-only` happens to return, and a change to a shared
 input is invisible.
 
 What the tree should do instead is carry the per-stack facts in its own shape,
-and generate everything that is shared. Terramate's
+and generate everything that is shared. Terramate’s
 [stacks](https://terramate.io/docs/cli/stacks/) and
 [code generation](https://terramate.io/docs/cli/code-generation/) are built for
 exactly that split.
 
-## Three Directories That Matter
+## Three directories that matter
 
 Everything that holds Terraform code goes in one of three places, and the rule
 for each is short:
@@ -71,7 +71,7 @@ simpler to leave in place and migrate stack by stack than to convert in one
 commit.
 
 Keeping `modules/` in the same repository is what makes change detection
-transitive. Terramate parses the `module` blocks in a stack's `*.tf` files and
+transitive. Terramate parses the `module` blocks in a stack’s `*.tf` files and
 follows local sources, so a commit that touches nothing but a module marks the
 stacks that call it as changed:
 
@@ -88,7 +88,7 @@ warning, and a module pulled from a registry cannot be diffed at all. Both mean
 the same thing: code that stacks depend on belongs inside the tree, or
 continuous integration plans the wrong set of stacks.
 
-## Path as Identity
+## Path as identity
 
 Terramate globals are defined per directory and inherited by everything below,
 so the directory a file sits in decides its scope. That turns the path into the
@@ -150,11 +150,11 @@ grep -E 'bucket|key ' stacks/aws/acme-production/eu-west-1/acm-v2/000*.tf
 ```
 
 The bucket, the AWS profile and the environment tag all follow the new path.
-The state key does not, because it is derived from the stack's
+The state key does not, because it is derived from the stack’s
 Terramate-assigned identifier rather than its location, so moving a stack
 between accounts rewrites its wiring without migrating its state.
 
-## Stack Anatomy
+## Stack anatomy
 
 A stack directory holds exactly three kinds of file: the marker, the generated
 files, and the Terraform someone wrote.
@@ -206,7 +206,7 @@ generator, produce **1,954 files and 63,618 lines** of Terraform across 508
 stacks. None of it is reviewed line by line, because none of it was written by
 anyone.
 
-## Keeping the Tree Honest
+## Keeping the tree honest
 
 Committed generated code is only trustworthy if generation is enforced.
 `terramate generate` runs in pre-commit, filtered to `^stacks/.*/.*\.tm\.hcl$`,
@@ -247,7 +247,7 @@ Tool versions belong under the same discipline, since the output of
 `terramate generate` depends on the binary that produced it. Pin Terramate and
 Terraform in the repository with [mise](https://mise.jdx.dev/) or an equivalent,
 rather than leaving them to whatever each engineer installed; the setup is in
-[Mise: Faster, Smarter Tool Versioning](/blog/posts/mise-faster-smarter-tool-versioning/).
+[Mise: faster, smarter tool versioning](/blog/posts/mise-faster-smarter-tool-versioning/).
 
 ## Limitations
 
@@ -269,13 +269,13 @@ Finally, this is a target, not a migration path. An existing flat repository
 converts one stack at a time, and the legacy tree coexists with the new one for
 as long as that takes.
 
-## What's Next?
+## What’s next?
 
 The generators referenced above are where the layout pays off, and they need one
 thing the tree cannot give them: credentials.
-[One Terraform Module for Provider Credentials](/blog/posts/one-terraform-module-for-provider-credentials/)
+[One Terraform module for provider credentials](/blog/posts/one-terraform-module-for-provider-credentials/)
 covers the module every stack reads them through, and
-[Generating Terraform Providers With Terramate](/blog/posts/generating-terraform-providers-with-terramate/)
+[Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/)
 takes apart the generator that wires the two together. For the version
 constraints those generators emit, see
-[Terraform Version Constraints](/blog/posts/terraform-version-constraints-striking-the-right-balance/).
+[Terraform version constraints](/blog/posts/terraform-version-constraints-striking-the-right-balance/).

@@ -1,6 +1,6 @@
 ---
-title: Generating Terraform Providers With Terramate
-description: Declare providers once as hierarchical globals and let Terramate render every stack's provider blocks.
+title: Generating Terraform providers with Terramate
+description: Declare providers once as hierarchical globals and let Terramate render every stack’s provider blocks.
 date: 2026-09-15 09:00:00
 categories:
   - terraform
@@ -28,7 +28,7 @@ below was tested with Terramate 0.17.2 and Terraform 1.15.8. The snippets come
 from a minimal reproduction of a pattern that runs in a private repository, so
 account names, profiles and secret paths are placeholders.
 
-## The Provider Boilerplate Problem
+## The provider boilerplate problem
 
 A monorepo of Terraform root modules repeats the same three things in every
 stack: a `required_providers` block, one `provider` block per provider with the
@@ -56,10 +56,10 @@ aliases differ per stack. Templating it with a script works, and then the
 repository owns a template engine and the drift problem moves into it.
 
 What is missing is a declaration: each stack states which providers it needs,
-and something else renders the HCL. That is what Terramate's
+and something else renders the HCL. That is what Terramate’s
 [code generation](https://terramate.io/docs/cli/code-generation/) does.
 
-## Declaring Providers as Globals
+## Declaring providers as globals
 
 [Part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) covers
 how [globals](https://terramate.io/docs/cli/code-generation/variables/globals)
@@ -116,7 +116,7 @@ globals "terraform" "providers" "aws.shared-services" {
 The `enabled` flag is what makes this composable: a provider declared high in
 the tree can be switched off for one subtree without deleting the declaration.
 
-## Generating the Provider Blocks
+## Generating the provider blocks
 
 The generator is a single `generate_hcl` block in `stacks/imports`, imported by
 the root of each subtree, as described in part one. Its
@@ -152,7 +152,7 @@ The `content` block renders both maps. The version map goes out as a single
 line, `tm_dynamic "required_providers" { attributes = let.required_providers }`,
 nested in a `terraform` block. The providers themselves are a `tm_dynamic` over
 the other map: one `provider` block per entry, with a nested `default_tags`
-block only where the provider is `aws`. Their attributes are the stack's own
+block only where the provider is `aws`. Their attributes are the stack’s own
 `config`, merged with the credential references covered in the next section.
 
 ```hcl
@@ -233,7 +233,7 @@ a stack can extend the set through its own global but cannot override `StackId`
 or `env` by reusing the key. `tm_dynamic` is documented under
 [generate_hcl](https://terramate.io/docs/cli/code-generation/generate-hcl#the-tm-dynamic-block).
 
-## Wiring Credentials Into Providers
+## Wiring credentials into providers
 
 Most SaaS providers need a token, and the token comes from the
 [lookup module](/blog/posts/one-terraform-module-for-provider-credentials/) that
@@ -263,7 +263,7 @@ default_config_partials = {
 ```
 
 The `static` entries become plain attributes; the `dynamic` ones become nested
-blocks, here GitHub's `app_auth`. Both reference the same module output, one map
+blocks, here GitHub’s `app_auth`. Both reference the same module output, one map
 of secret data keyed by provider name. The generator instantiates that module
 only when a stack enables a provider that needs credentials, computed as a
 `tm_setintersection` of the providers that have a partial and the providers that
@@ -293,7 +293,7 @@ provider "pagerduty" {
 No stack references a secret identifier, and a stack that enables no such
 provider gets no secret lookup and no module block at all.
 
-## Reviewing a Provider Change
+## Reviewing a provider change
 
 Because the output is committed and generation is
 [enforced in continuous integration](/blog/posts/structuring-a-terraform-monorepo-with-terramate/),
@@ -313,7 +313,7 @@ only in stacks touched by the current branch.
 
 ## Limitations
 
-The single-version rule is Terraform's, not Terramate's. A stack that genuinely
+The single-version rule is Terraform’s, not Terramate’s. A stack that genuinely
 needs two major versions of one provider cannot be expressed this way, because
 the alias shares the constraint emitted for the base provider.
 
@@ -323,15 +323,15 @@ an output that does not exist. The error surfaces at `terraform init` or
 `terraform validate`, one step later than the mistake.
 
 Attributes come from the declaration, but blocks do not. A provider whose
-credentials or options live in a nested block, as GitHub's `app_auth` and AWS's
+credentials or options live in a nested block, as GitHub’s `app_auth` and AWS’s
 `default_tags` do, needs its own `tm_dynamic` and condition in the generator.
 Adding such a provider is a generator edit, not just a global.
 
-## What's Next?
+## What’s next?
 
 Generating the code a stack repeats is one use of `generate_hcl`. The other is
 generating code a stack does not have at all, from a declaration that is not
 HCL:
-[Generating Terraform for Teams From One JSON File](/blog/posts/generating-terraform-for-teams-from-one-json-file/)
-turns a `team.json` descriptor into a team's entire set of module calls with the
+[Generating Terraform for teams from one JSON file](/blog/posts/generating-terraform-for-teams-from-one-json-file/)
+turns a `team.json` descriptor into a team’s entire set of module calls with the
 same mechanism.

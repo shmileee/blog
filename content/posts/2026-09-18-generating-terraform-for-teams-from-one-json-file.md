@@ -1,5 +1,5 @@
 ---
-title: Generating Terraform for Teams From One JSON File
+title: Generating Terraform for teams from one JSON file
 description: A JSON descriptor per team, parsed by Terramate, generates every Terraform module that team needs.
 date: 2026-09-18 09:00:00
 categories:
@@ -7,13 +7,13 @@ categories:
   - terramate
 ---
 
-A self-service model where a team's infrastructure is described by one
+A self-service model where a team’s infrastructure is described by one
 `team.json` file and everything else is generated. This post covers the
 descriptor and its schema, how Terramate parses it into globals, how one
 generated file per platform is produced from what the JSON contains, and what
 onboarding and teardown look like. It is the fourth post in a series on
 Terraform and Terramate, after
-[Generating Terraform Providers With Terramate](/blog/posts/generating-terraform-providers-with-terramate/).
+[Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/).
 
 The outcome is that adding a team is a directory, a JSON file and a pull
 request. No one writes Terraform, and no one reviews Terraform that was copied
@@ -29,7 +29,7 @@ Terramate 0.17.2, Terraform 1.15.8 and
 The platform names are generic; the repository this pattern comes from carries a
 few dozen team directories.
 
-## The Onboarding Ticket Problem
+## The onboarding ticket problem
 
 A new team needs the same set of things every other team has: a GitHub team with
 the right parent, a public Slack channel, an on-call rotation with an escalation
@@ -38,7 +38,7 @@ is coupled, because the on-call escalation policy wants the channel that the
 Slack step created.
 
 Done by hand, this is a ticket with a checklist, and the checklist rots. Done by
-copying another team's stack, which is the usual fix in a Terraform monorepo, it
+copying another team’s stack, which is the usual fix in a Terraform monorepo, it
 produces a directory of near-identical HCL per team, and the differences between
 two teams are buried in files that are 95% the same. Either way the platform
 team is in the path of every change, including the ones that are a rename of a
@@ -46,13 +46,13 @@ Slack channel.
 
 What a team actually has to say is small: which GitHub teams, which channel,
 which time zones the rotation covers. Everything else is policy. That split is
-what the descriptor makes explicit, with Terramate's
+what the descriptor makes explicit, with Terramate’s
 [code generation](https://terramate.io/docs/cli/code-generation/) supplying the
 policy half.
 
-## The Team Descriptor
+## The team descriptor
 
-The team's directory name is its identity, and the only other required file is
+The team’s directory name is its identity, and the only other required file is
 the descriptor:
 
 ```json title="stacks/teams/team-platform/team.json"
@@ -123,7 +123,7 @@ check-jsonschema --schemafile stacks/teams/team.schema.json stacks/teams/*/team.
 #     $: Additional properties are not allowed ('github', 'oncall', 'slack', 'team_name_readable' were unexpected)
 ```
 
-## Parsing It With Terramate
+## Parsing it with Terramate
 
 One `teams.tm.hcl` at the root of `stacks/teams` applies to every team
 directory below it. Two globals do the parsing:
@@ -140,13 +140,13 @@ globals {
 `tm_file` reads a path relative to the stack being generated and
 `tm_jsondecode` turns it into a Terramate value, so `global.team_config` is an
 object the rest of the file can walk. `terramate.stack.path.basename` is the
-directory name, which is why the descriptor never repeats the team's own name,
+directory name, which is why the descriptor never repeats the team’s own name,
 and `tm_replace` produces the variant that platforms rejecting hyphens need.
 
 Both are evaluated per stack. The same file, read once, yields a different
 `team_config` in every team directory.
 
-## One Generated File per Platform
+## One generated file per platform
 
 Each platform gets its own `generate_hcl` block, guarded by whether the
 descriptor mentions it at all:
@@ -175,7 +175,7 @@ generate_hcl "100_terramate_generated_github_teams.tf" {
 
 `tm_can` returns false when the key is absent, and a `generate_hcl` block whose
 condition is false produces no file, so the set of generated files is a direct
-reflection of the descriptor's top-level keys. Two teams, one with three
+reflection of the descriptor’s top-level keys. Two teams, one with three
 platforms and one with none, generate this:
 
 ```text
@@ -195,7 +195,7 @@ terramate generate
 The backend and provider files come from the shared imports covered in
 [part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) and
 [part three](/blog/posts/generating-terraform-providers-with-terramate/); the
-`100` series is the team's own. Inside `100`, the JSON array has become one
+`100` series is the team’s own. Inside `100`, the JSON array has become one
 module instantiation per element, keyed by type:
 
 ```hcl title="stacks/teams/team-platform/100_terramate_generated_github_teams.tf"
@@ -223,10 +223,10 @@ github_teams_without_nulls = {
 Without it, a descriptor that omits `parent_team` generates `parent_team = null`
 rather than omitting the attribute, and to Terraform those are not the same
 thing. Measured on 1.15.8: passing `null` to an ordinary input variable leaves
-the variable null and the module's default unused. Omitting the attribute
+the variable null and the module’s default unused. Omitting the attribute
 applies the default. A variable declared `nullable = false` converts the null
 back into its default, which is why some modules survive this and others do
-not. Generating nothing is the only form that means "use the default" in all
+not. Generating nothing is the only form that means “use the default” in all
 three cases.
 
 The second is that generated files may reference each other. The on-call
@@ -248,7 +248,7 @@ for Terraform to resolve at plan time. A team with a channel gets
 without one gets `escalation_channel = null` and no `102` file at all. The
 substitution happens on the next `terramate generate`, not on the next plan.
 
-## Onboarding and Teardown
+## Onboarding and teardown
 
 Adding a team is four steps, and only one of them is a decision:
 
@@ -287,8 +287,8 @@ of exactly those resources, reviewable as a diff before anyone runs it.
 
 Deleting a key is a destroy. That is correct, and it is also one keystroke away
 from removing a channel a team is using. The schema and the review are the only
-guardrails: nothing in the generation step distinguishes "we no longer want
-this" from "I meant to edit the line below".
+guardrails: nothing in the generation step distinguishes “we no longer want
+this” from “I meant to edit the line below”.
 
 The descriptor can only express what the generator already understands. Adding a
 platform, or a field the modules do not take yet, is a change to `teams.tm.hcl`
@@ -309,16 +309,16 @@ commit message rather than next to the flag. A schema with descriptions helps a
 reader more than it first appears, because it is the only documentation adjacent
 to the file.
 
-Every team's generated files are rewritten when the generator changes, so a
+Every team’s generated files are rewritten when the generator changes, so a
 policy change lands as one commit touching every team directory. Splitting it by
 team is not possible without splitting the generator edit itself.
 
-## What's Next?
+## What’s next?
 
 A team descriptor is one instance of a general shape: a small declaration
 outside HCL, a generator that turns it into module calls, and no hand-written
 Terraform between them. All four posts so far assume the layout is already
 there.
-[Migrating Terraform Stacks to Terramate With an Agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/)
+[Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/)
 covers getting to it from a flat repository, with a plan gate mechanical enough
 that an agent can drive the migration behind it.

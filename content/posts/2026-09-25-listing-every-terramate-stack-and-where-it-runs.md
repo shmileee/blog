@@ -1,6 +1,6 @@
 ---
-title: Listing Every Terramate Stack and Where It Runs
-description: The nested layout hides what exists, so rebuild the overview from Terramate's own packages.
+title: Listing every Terramate stack and where it runs
+description: The nested layout hides what exists, so rebuild the overview from Terramate’s own packages.
 date: 2026-09-25 09:00:00
 categories:
   - terraform
@@ -12,14 +12,13 @@ deployed, assembled from the same packages the `terramate` command uses rather
 than from the directory tree. It covers what the nesting costs a reader, the
 four calls that produce the inventory, and what a terminal user interface over
 it adds. It is the sixth post in a series on Terraform and Terramate, after
-[Migrating Terraform Stacks to Terramate With an
-Agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/).
+[Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/).
 
 The inventory program below was written and run for this post against a scratch
 repository, with Terramate 0.17.3 and Terraform 1.15.8. Account names are
 placeholders.
 
-## What the Deep Tree Costs
+## What the deep tree costs
 
 The migration trades one problem for another. `app/<stack>/<env>/` was two
 levels deep and `ls` was a complete inventory. The Terramate layout is
@@ -84,7 +83,7 @@ its deployments underneath.
   <figcaption class="exhibit-caption">The view a person wants: identity on the left, every deployment of it on the right, grouped by environment.</figcaption>
 </figure>
 
-## Building the Inventory
+## Building the inventory
 
 Producing that view needs the account, region and environment of every stack,
 and those are not in the path alone: they are globals, inherited from wherever
@@ -126,7 +125,7 @@ STACK                                         ACCOUNT           REGION     ENV
 /stacks/teams/team-platform                   acme-operations   eu-west-1  operations
 ```
 
-## The Explorer
+## The explorer
 
 I built the tool I use for this and called it `terramate-stacks-explorer`. It
 is an in-house Go binary rather than something you can install from anywhere,
@@ -165,7 +164,7 @@ terramate-stacks-explorer --view deployments --env production --format table
 `--values` prints the dimensions themselves with counts, which is how you
 learn what a repository contains before you know what to filter on, and
 `--format json` emits every field the loader resolved, including the account
-identifier, the AWS profile, the Terraform version constraint and the stack's
+identifier, the AWS profile, the Terraform version constraint and the stack’s
 identifier. That is the part worth having: an inventory a script can consume,
 rather than a `find` command with conventions baked into it.
 
@@ -190,7 +189,7 @@ the stack directory.
 And it needs the globals to be named the way the layout in
 [part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) names
 them: `account_name`, `region_name`, `environment`, `aws_config_profile`. Those
-four are the tool's entire contract with the repository. A stack that omits one
+four are the tool’s entire contract with the repository. A stack that omits one
 is not an error, it just has less to show. A SaaS stack with no AWS region
 reports `-` for region and falls back to the path segment for its account:
 
@@ -208,8 +207,8 @@ for setting them at the account and region level, once, rather than per stack.
 Three things make the interactive version worth the extra work, none of which a
 table can do: fuzzy filtering by account, region or environment; grouping
 deployments under one identity in lifecycle order rather than alphabetically;
-and acting on a selection, where opening a subshell in the stack's directory
-turns "where does this run" into "put me there".
+and acting on a selection, where opening a subshell in the stack’s directory
+turns “where does this run” into “put me there”.
 [Bubble Tea](https://github.com/charmbracelet/bubbletea) is the obvious toolkit
 in Go, and keeping the inventory a plain list underneath keeps `--format json`
 honest for scripting.
@@ -218,12 +217,16 @@ Recorded against a mock repository of 22 deployments, it looks like this:
 
 <figure class="media-figure media-figure-wide wide">
   <div class="media-frame media-frame-dark">
-    <img
-      src="/blog-static/terramate-stacks-explorer.gif"
+    <video
+      src="/blog-static/terramate-stacks-explorer.mp4"
+      poster="/blog-static/terramate-stacks-explorer-poster.webp"
       width="1400"
       height="800"
-      alt="A terminal UI listing twelve distinct stacks; selecting one shows its four deployments grouped by environment, then the inventory is filtered to production and fuzzy-searched for eks"
-    />
+      controls
+      playsinline
+      preload="metadata"
+      aria-label="Terminal recording: a UI listing twelve distinct stacks; selecting one shows its four deployments grouped by environment, then the inventory is filtered to production and fuzzy-searched for eks"
+    ></video>
   </div>
   <figcaption>Twelve identities, 22 deployments: browse, filter to one environment, search, then act on the selection.</figcaption>
 </figure>
@@ -252,7 +255,7 @@ whose globals say `production` and whose last apply was six months ago looks
 identical here to one applied this morning. The git history column is the
 closest thing to an answer, and it only reports on the code.
 
-## What's Next?
+## What’s next?
 
 Every post in this series so far assumes the declarations are right: a stack
 names its providers, a descriptor names its platforms, a global names its

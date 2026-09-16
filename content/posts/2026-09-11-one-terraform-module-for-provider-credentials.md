@@ -1,5 +1,5 @@
 ---
-title: One Terraform Module for Provider Credentials
+title: One Terraform module for provider credentials
 description: One module maps provider names to secret paths; no Terraform stack knows where credentials live.
 date: 2026-09-11 09:00:00
 categories:
@@ -14,7 +14,7 @@ wrong name fail at plan time, and what changes when the store underneath is
 **Google Secret Manager** instead of
 [**AWS Secrets Manager**](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html).
 It is the second post in a series on Terraform and Terramate, after
-[Structuring a Terraform Monorepo With Terramate](/blog/posts/structuring-a-terraform-monorepo-with-terramate/).
+[Structuring a Terraform monorepo with Terramate](/blog/posts/structuring-a-terraform-monorepo-with-terramate/).
 
 The result is that no stack in the repository contains a secret identifier. A
 stack names what it needs, and the module is the single place that knows where
@@ -28,7 +28,7 @@ The module below was validated with Terraform 1.15.8, and the transcripts are
 from a scratch repository built for this post. Secret names are generic
 placeholders.
 
-## The Credential Sprawl Problem
+## The credential sprawl problem
 
 The PagerDuty provider needs a token before it can do anything, which in
 practice means an
@@ -54,7 +54,7 @@ credential has to be read at plan time, before any resource exists, so there is
 no chance to fix it later in the run. Whatever knows the identifiers has to be
 available to every stack, and it has to be one thing.
 
-## A Module That Provisions Nothing
+## A module that provisions nothing
 
 The module has no `resource` blocks. It holds a registry of identifiers, a
 filter, a data source, and one output, which makes it safe to instantiate
@@ -124,11 +124,11 @@ output "secrets" {
 
 A secret version is a single string, so the `jsondecode` is what turns each one
 into a map and gives the output its shape: one entry per requested name, each
-holding that secret's keys. The module does not know what those keys are, so
+holding that secret’s keys. The module does not know what those keys are, so
 adding a field to a secret needs no change here, and a consumer reads
 `module.providers_credentials.secrets.pagerduty.api_token` directly.
 
-## Validating the Request
+## Validating the request
 
 A name that is not in the registry is the one mistake worth catching early, and
 a [`validation`](https://developer.hashicorp.com/terraform/language/block/variable)
@@ -159,11 +159,11 @@ terraform plan
 # Unknown names requested. Known names: github, pagerduty, postgresql, slack.
 ```
 
-That message is the module's documentation as far as most callers are
+That message is the module’s documentation as far as most callers are
 concerned, which is why it enumerates the registry instead of saying the input
 is invalid.
 
-## Swapping the Store
+## Swapping the store
 
 Nothing above is specific to Secrets Manager except the data source. Reading the
 same credentials out of
@@ -190,7 +190,7 @@ key out of the result. What the output promises is a map per name, not a
 particular encoding: a store that already returns structured data needs no
 `jsondecode` at all.
 
-## Consuming It From a Stack
+## Consuming it from a stack
 
 No stack writes the module block by hand. The
 [provider generator](/blog/posts/generating-terraform-providers-with-terramate/)
@@ -217,7 +217,7 @@ declares. The module itself assumes nothing about where it reads from.
 Secret data read through a `data` block is stored in the state file in
 plaintext. That is a property of Terraform, not of this module, and it applies
 equally to the three-line data source it replaces. What centralizing the reads
-adds is how easy it becomes to pull more secrets into a stack than that stack's
+adds is how easy it becomes to pull more secrets into a stack than that stack’s
 state should hold.
 
 The identity running a stack needs read access to every secret its requested
@@ -233,11 +233,11 @@ it also puts the module on the critical path of a great many plans: **273 of the
 508 stacks** in the repository this comes from instantiate it. Treat changes to
 it accordingly.
 
-## What's Next?
+## What’s next?
 
 The list of names in that generated module block is not written by anyone: it is
 the intersection of the providers a stack enabled and the names this module
 knows about.
-[Generating Terraform Providers With Terramate](/blog/posts/generating-terraform-providers-with-terramate/)
+[Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/)
 covers the generator that computes it, along with the provider blocks and
 version constraints it emits alongside.

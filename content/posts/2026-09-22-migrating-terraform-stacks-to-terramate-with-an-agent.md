@@ -1,5 +1,5 @@
 ---
-title: Migrating Terraform Stacks to Terramate With an Agent
+title: Migrating Terraform stacks to Terramate with an agent
 description: A per-stack Terraform migration behind a tags-only plan gate, driven by an agent through Atlantis.
 date: 2026-09-22 09:00:00
 categories:
@@ -12,7 +12,7 @@ without destroying or moving anything. It covers the order to migrate in, why
 the state object is copied rather than moved, the plan that tells you a
 migration worked, and how the whole procedure ends up being something an agent
 can drive. It is the fifth post in a series on Terraform and Terramate, after
-[Generating Terraform for Teams From One JSON File](/blog/posts/generating-terraform-for-teams-from-one-json-file/).
+[Generating Terraform for teams from one JSON file](/blog/posts/generating-terraform-for-teams-from-one-json-file/).
 
 The procedure is deliberately boring: nothing is destroyed, nothing is moved,
 and the gate is mechanical enough to hand to someone, or something, that has
@@ -23,7 +23,7 @@ one used on a private monorepo of 508 stacks, where **85 legacy stacks have
 moved this way so far** and 30 are still waiting; buckets, keys and account
 names are placeholders.
 
-## One Stack at a Time, in the Right Order
+## One stack at a time, in the right order
 
 The layout being replaced is the usual one: `app/<stack>/<env>/`, each directory
 holding its own `main.tf`, its own `terraform.tf` with a backend block, and a
@@ -45,11 +45,11 @@ Classify before starting:
 | Hold | reads or is read via `terraform_remote_state`, owns shared networking or DNS, inline secrets in `*.tf` | migrate later, as a group |
 
 The `terraform_remote_state` rule is the one that bites. A producer and its
-consumers have to move together, or the producer first: copying a producer's
+consumers have to move together, or the producer first: copying a producer’s
 state to a new key while a consumer still reads the old one leaves the consumer
 reading a snapshot that stops being updated.
 
-## Copy the State, Never Move It
+## Copy the state, never move it
 
 The mechanical part is short, and only one step of it touches AWS directly.
 
@@ -104,7 +104,7 @@ the copy left behind as an orphan. Comparing `ETag` and `ContentLength` on both
 objects afterwards is a cheap integrity check; state files are usually a single
 part, so a matching `ETag` is a strong signal.
 
-## The Tags-Only Plan Gate
+## The tags-only plan gate
 
 A migrated stack should manage exactly the resources it managed before, and the
 plan on the pull request is where that is proven. It is never an empty plan,
@@ -115,9 +115,9 @@ the stack owns.
 That gives a gate precise enough to delegate. The migration passes when the
 plan contains **only** `tags` and `tags_all` changes, and zero creates,
 replaces, destroys or non-tag attribute changes. A stack that already carried
-the framework's four default tags shows one addition, the generated stack
+the framework’s four default tags shows one addition, the generated stack
 identifier; a stack with no default tags at all shows five. Tag-only
-reconciliation on a state-copied stack is the AWS provider's documented
+reconciliation on a state-copied stack is the AWS provider’s documented
 behaviour, discussed at length in [provider issue
 32857](https://github.com/hashicorp/terraform-provider-aws/issues/32857).
 
@@ -143,7 +143,7 @@ Deleting the legacy directory belongs in the same pull request, and it has to be
 the whole directory: continuous integration that discovers Terraform projects by
 directory will still find an empty one and fail initialising it.
 
-## Handing the Runbook to an Agent
+## Handing the runbook to an agent
 
 Written down, the procedure above is a runbook, and a runbook whose steps never
 vary is a script with prose formatting. It is also close to ideal agent work:
@@ -230,11 +230,11 @@ runbook at the judgement part. It will happily prepare a migration for a stack
 that should have been held, which is why holding is the default and why the
 confirmation steps are not optional.
 
-## What's Next?
+## What’s next?
 
 A migrated repository is correct and considerably harder to read. `ls` stops
-being an answer to "what do we have", because the answer is now spread across
+being an answer to “what do we have”, because the answer is now spread across
 accounts and regions.
-[Listing Every Terramate Stack and Where It Runs](/blog/posts/listing-every-terramate-stack-and-where-it-runs/)
-covers getting that overview back by asking Terramate's own packages what
+[Listing every Terramate stack and where it runs](/blog/posts/listing-every-terramate-stack-and-where-it-runs/)
+covers getting that overview back by asking Terramate’s own packages what
 exists, rather than reading the tree.
