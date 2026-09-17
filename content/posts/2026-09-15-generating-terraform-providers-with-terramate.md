@@ -263,9 +263,35 @@ tm_dynamic "provider" {
 }
 ```
 
-The module block is generated the same way, only in a stack whose enabled
-providers appear in one of the two maps, with that intersection as
-`terraform_providers`. For a stack enabling `github` and `pagerduty`:
+The module block itself is generated from the intersection of the providers a
+stack enables and the providers the two maps hold credentials for, and only
+when that intersection is not empty:
+
+```hcl
+lets {
+  modules = "${terramate.stack.path.to_root}/modules"
+
+  credential_providers = tm_setintersection(
+    tm_keys(let.providers),
+    tm_keys(tm_merge(let.credentials, let.credential_blocks)),
+  )
+}
+
+content {
+  # ... the required_providers and provider blocks above ...
+
+  tm_dynamic "module" {
+    condition = tm_length(let.credential_providers) > 0
+    labels    = ["providers_credentials"]
+    content {
+      source              = "${let.modules}/providers-credentials"
+      terraform_providers = let.credential_providers
+    }
+  }
+}
+```
+
+For a stack enabling `github` and `pagerduty`:
 
 ```hcl title="stacks/saas/github/001_terramate_generated_providers.tf"
 module "providers_credentials" {
@@ -288,8 +314,8 @@ provider "pagerduty" {
 }
 ```
 
-No stack references a secret identifier, and a stack that enables no such
-provider gets no secret lookup and no module block at all.
+No stack references a secret identifier, and a stack whose providers need no
+credentials gets no module block at all.
 
 ## Reviewing a provider change
 
