@@ -174,7 +174,14 @@ generate_hcl "100_terramate_generated_github_teams.tf" {
     }
   }
 
-  # ... content: a tm_dynamic "module" over github_teams_without_nulls ...
+  content {
+    tm_dynamic "module" {
+      for_each   = let.github_teams_without_nulls
+      iterator   = team
+      labels     = [team.key]
+      attributes = team.value
+    }
+  }
 }
 ```
 
@@ -213,9 +220,9 @@ module "github_team_default" {
 # ... github_team_frontend, with the description from the descriptor ...
 ```
 
-Two details in that generator matter. The first is the comprehension
-the `content` block actually iterates, which strips attributes whose value came
-out `null`:
+Two details in that generator matter. The first is the comprehension the
+`content` block iterates, `github_teams_without_nulls`, which strips attributes
+whose value came out `null`:
 
 ```hcl
 github_teams_without_nulls = {

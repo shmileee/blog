@@ -59,8 +59,16 @@ for each is short:
 
 Keeping `modules/` in the same repository makes change detection
 transitive. Terramate parses the `module` blocks in a stack’s `*.tf` files and
-follows local sources, so a commit that touches nothing but a module marks the
-stacks that call it as changed:
+follows local sources. The `acm` stack’s hand-written file calls one module:
+
+```hcl title="stacks/aws/acme-development/eu-west-1/acm/main.tf"
+module "certificate" {
+  source      = "../../../../../modules/acm-certificate"
+  domain_name = "api.example.com"
+}
+```
+
+A commit that touches nothing but that module marks the stack as changed:
 
 ```bash
 git switch -c feat/change-validation-method
@@ -99,6 +107,19 @@ stacks/
 └── saas/                             stacks without an AWS account
 ```
 
+`aws.tm.hcl` pulls the two generators into the subtree, so every stack below it
+gets a backend file and a providers file:
+
+```hcl title="stacks/aws/aws.tm.hcl"
+import {
+  source = "/stacks/imports/000_terraform.tm.hcl"
+}
+
+import {
+  source = "/stacks/imports/001_providers.tm.hcl"
+}
+```
+
 The two files in between carry everything a stack inherits. An account
 directory states what is true of every stack in that account:
 
@@ -106,6 +127,7 @@ directory states what is true of every stack in that account:
 globals {
   environment        = "development"
   account_name       = "acme-development"
+  account_id         = "111111111111"
   aws_config_profile = "acme-development"
 }
 ```
@@ -123,6 +145,25 @@ import {
 }
 ```
 
+The generators read those globals. The backend one is the smaller of the two:
+the bucket belongs to the account, and the key to the stack’s identifier,
+which `terramate create` assigns:
+
+```hcl title="stacks/imports/000_terraform.tm.hcl"
+generate_hcl "000_terramate_generated_terraform.tf" {
+  content {
+    terraform {
+      backend "s3" {
+        bucket       = "tf-state-euw1-${global.account_id}"
+        key          = "terraform/stacks/by-id/${terramate.stack.id}/terraform.tfstate"
+        region       = "eu-west-1"
+        use_lockfile = true
+      }
+    }
+  }
+}
+```
+
 A stack three levels down declares none of this, so relocating one to another
 region is a `git mv` followed by a regeneration:
 
@@ -130,21 +171,18 @@ region is a `git mv` followed by a regeneration:
 git mv stacks/aws/acme-development/eu-west-1/acm \
        stacks/aws/acme-development/us-east-1/acm
 terramate generate
-# [~] 000_terramate_generated_terraform.tf
 # [~] 001_terramate_generated_providers.tf
 
-cd stacks/aws/acme-development/us-east-1/acm
-grep -E 'bucket|key |region' 000_terramate_generated_terraform.tf
-#     bucket         = "tf-state-use1-111111111111"
-#     key            = "terraform/stacks/by-id/<stack-id>/terraform.tfstate"
-#     region         = "us-east-1"
+grep region stacks/aws/acme-development/us-east-1/acm/001*.tf
+#   region  = "us-east-1"
 ```
 
-The provider region and the state bucket follow the new path, and nothing in
-the stack directory was edited. The state key does not follow, because it is
-derived from the stack’s Terramate-assigned identifier rather than its
-location, so the state object has to be copied to the new bucket under the
-same key, the same copy
+The provider region follows the new path, and nothing in the stack directory
+was edited. The backend file did not change at all: the bucket is the
+account’s and the key is the stack’s, and the move touched neither, so no
+state object moved either. A move between accounts is the case that changes
+the bucket, and then the object is copied to the new bucket under the same
+key, the copy
 [the migration post](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/)
 uses.
 

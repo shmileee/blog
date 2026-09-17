@@ -165,8 +165,8 @@ with the list of names that would have worked:
 terraform plan
 # Error: Invalid value for variable
 #
-#   on main.tf line 7, in module "providers_credentials":
-#    7:   terraform_providers = ["github", "datadog"]
+#   on providers.tf line 3, in module "providers_credentials":
+#    3:   terraform_providers = ["github", "datadog"]
 #
 # Unknown names. Known: github, pagerduty, postgresql, slack.
 ```

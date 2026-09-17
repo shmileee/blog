@@ -157,7 +157,7 @@ content {
     for_each = let.providers
     labels   = [provider.key]
     attributes = tm_merge(
-      provider.value.config,
+      tm_try(provider.value.config, {}),
       {
         for k, v in tm_try(let.credentials[provider.key], {}) :
         k => tm_hcl_expression(v)
@@ -291,9 +291,32 @@ content {
 }
 ```
 
-For a stack enabling `github` and `pagerduty`:
+A SaaS stack declares its providers the same way the region declared AWS,
+with whatever configuration is not a credential:
+
+```hcl title="stacks/saas/github/providers.tm.hcl"
+globals "terraform" "providers" "github" {
+  enabled = true
+  source  = "integrations/github"
+  version = "~> 6.0"
+  config = {
+    owner = "acme"
+  }
+}
+
+globals "terraform" "providers" "pagerduty" {
+  enabled = true
+  source  = "pagerduty/pagerduty"
+  version = "~> 3.0"
+}
+```
+
+Both have credential entries, so the stack gets the module block, and each
+provider gets its references:
 
 ```hcl title="stacks/saas/github/001_terramate_generated_providers.tf"
+// ... terraform { required_providers { github, pagerduty } } ...
+
 module "providers_credentials" {
   source = "../../../modules/providers-credentials"
   terraform_providers = [

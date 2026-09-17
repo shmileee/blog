@@ -90,6 +90,12 @@ the paths but not the evaluated values, so the better route is the library
 that command is built on. Four calls do the work:
 
 ```go
+import (
+    "github.com/terramate-io/terramate/config"
+    "github.com/terramate-io/terramate/globals"
+    "github.com/terramate-io/terramate/stack"
+)
+
 rootdir, err := findRoot(".")            // walk up to terramate.tm.hcl
 root, err := config.LoadRoot(rootdir, false)
 entries, err := stack.List(root, root.Tree())
@@ -97,7 +103,8 @@ entries, err := stack.List(root, root.Tree())
 for _, e := range entries {
     g := globals.ForStack(root, e.Stack)
     fmt.Println(e.Stack.Dir,
-        str(g.Globals, "account_name"), str(g.Globals, "environment"))
+        str(g.Globals, "account_name"), str(g.Globals, "region_name"),
+        str(g.Globals, "environment"))
 }
 ```
 
@@ -105,7 +112,8 @@ for _, e := range entries {
 evaluation code generation uses, so a stack whose `environment` global says
 `production` while its path says otherwise reports `production`. Reading a
 single value out is a key-path lookup that returns a `cty` value, so a small
-`str` helper is worth writing once.
+`str` helper that returns `-` for a key the stack does not define is worth
+writing once.
 
 Two practical notes. The library logs through `zerolog` at debug level, so
 `zerolog.SetGlobalLevel(zerolog.Disabled)` belongs at the top of `main`. And
@@ -113,7 +121,8 @@ Two practical notes. The library logs through `zerolog` at debug level, so
 stack directory, which matters more than it sounds: the question is usually
 asked from deep inside the tree.
 
-Under a hundred lines, that is a complete non-interactive inventory:
+With a header and aligned columns on top, that is a complete non-interactive
+inventory in under a hundred lines:
 
 ```text
 STACK                                         ACCOUNT           REGION     ENV

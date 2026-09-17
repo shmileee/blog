@@ -111,10 +111,15 @@ byte-for-byte and the code moved rather than rewritten, Terraform refreshes
 every resource in the copied state, compares it with the moved configuration,
 and finds nothing to do.
 
-That gives a gate precise enough to delegate. The migration passes when the
-plan reports **no changes**: zero creates, replaces, destroys or attribute
-updates. Anything else means stop, and the diagnosis order matters more than
-the list:
+That gives a gate precise enough to delegate. The migration passes on one line
+of plan output:
+
+```text
+No changes. Your infrastructure matches the configuration.
+```
+
+Zero creates, replaces, destroys or attribute updates. Anything else means
+stop, and the diagnosis order matters more than the list:
 
 1. **Provider version drift**: the generated constraint resolves to a different
    major than the legacy lock file. Fix the declaration, never upgrade to clear
