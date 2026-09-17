@@ -8,26 +8,19 @@ categories:
 ---
 
 A self-service model where a team’s infrastructure is described by one
-`team.json` file and everything else is generated. This post covers why a team
-is declared as code at all, the descriptor and its schema, how Terramate parses
-it into globals, how one generated file per platform is produced from what the
-JSON contains, and what onboarding and teardown look like. It is the fourth post in a series on
+`team.json` file and everything else is generated, so adding a team is a
+directory, a JSON file and a pull request: no one writes Terraform, and no one
+reviews Terraform that was copied from another team. Teams live in their own
+subtree, `stacks/teams/<team>`, beside the account-and-region hierarchy the
+rest of the repository uses rather than inside it, because a team is not a
+thing that belongs to one AWS account. It is the fourth post in a series on
 Terraform and Terramate, after
 [Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/).
 
-The outcome is that adding a team is a directory, a JSON file and a pull
-request. No one writes Terraform, and no one reviews Terraform that was copied
-from another team.
-
-Teams live in their own subtree, `stacks/teams/<team>`, beside the
-account-and-region hierarchy the rest of the repository uses rather than inside
-it, because a team is not a thing that belongs to one AWS account.
-
-Every transcript below came out of a two-team scratch repository, exercised with
-Terramate 0.17.3, Terraform 1.15.8 and
-[check-jsonschema](https://github.com/python-jsonschema/check-jsonschema) 0.38.
-The platform names are generic; the repository this pattern comes from carries a
-few dozen team directories.
+Transcripts come from a two-team scratch repository with Terramate 0.17.3,
+Terraform 1.15.8 and
+[check-jsonschema](https://github.com/python-jsonschema/check-jsonschema) 0.38;
+platform names are generic.
 
 ## Why a team is infrastructure
 
@@ -47,18 +40,13 @@ one rather than a search through four consoles. The policy, which platforms a
 team gets and how they are named and connected, is written once, and every
 team gets the same one.
 
-## The onboarding ticket problem
-
 Done by hand, a new team is a ticket with a checklist, and the checklist rots.
-Done by copying another team’s stack, which is the usual fix in a Terraform
-monorepo, it produces a directory of near-identical HCL per team, and the
-differences between two teams are buried in files that are 95% the same. Either
-way the platform team is in the path of every change, including the ones that
-are a rename of a Slack channel.
-
-What a team actually has to say is small: which GitHub teams, which channel,
-which time zones the rotation covers. Everything else is policy. That split is
-what the descriptor makes explicit, with Terramate’s
+Done by copying another team’s stack, the usual fix in a Terraform monorepo, it
+is a directory of near-identical HCL per team, with the differences buried in
+files that are 95% the same and the platform team in the path of every change,
+down to a renamed Slack channel. What a team actually has to say is small: which
+GitHub teams, which channel, which time zones the rotation covers. Everything
+else is policy, and the descriptor makes that split explicit, with Terramate’s
 [code generation](https://terramate.io/docs/cli/code-generation/) supplying the
 policy half.
 
@@ -282,9 +270,9 @@ generation, so the pull request contains the descriptor plus every file derived
 from it. A reviewer reads the JSON, and the HCL beside it either matches the
 policy or the generator has a bug.
 
-At the scale this runs at, that trade is **37 descriptors totalling 1,009 lines
-of JSON**, plus a 288-line generator, in exchange for **263 generated files and
-7,776 lines** of Terraform that nobody writes or reviews.
+The trade, counted: **37 descriptors totalling 1,009 lines of JSON** and a
+288-line generator, for **263 generated files and 7,776 lines** of Terraform
+that nobody writes or reviews.
 
 Teardown runs the same machinery backwards. Emptying the descriptor removes
 every conditional file, which is why the schema accepts `{}`:

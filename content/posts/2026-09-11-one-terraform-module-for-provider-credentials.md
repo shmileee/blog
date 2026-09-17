@@ -7,26 +7,18 @@ categories:
   - terramate
 ---
 
-A Terraform module that provisions nothing. It takes a list of logical names,
+A Terraform module that provisions nothing: it takes a list of logical names,
 looks each one up in a registry of secret identifiers, and returns the secret
-data as one map. This post covers its interface, the validation that makes a
-wrong name fail at plan time, and what changes when the store underneath is
-**Google Secret Manager** instead of
-[**AWS Secrets Manager**](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html).
-It is the second post in a series on Terraform and Terramate, after
-[Structuring a Terraform monorepo with Terramate](/blog/posts/structuring-a-terraform-monorepo-with-terramate/).
-
-The result is that no stack in the repository contains a secret identifier. A
+data as one map, so no stack in the repository contains a secret identifier. A
 stack names what it needs, and the module is the single place that knows where
-that lives and how to read it.
+that lives and how to read it. It is ordinary Terraform, callable from any root
+module, and it is shown in a plain stack first; the stacks it was written for
+live in the Terramate monorepo from
+[part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/), where
+the module call itself is generated. This is the second post in a series on
+Terraform and Terramate.
 
-The module is ordinary Terraform, callable from any root module, and the post
-shows it in a plain stack first. The stacks it was written for live in the
-Terramate monorepo from part one, where the module call itself is generated;
-that is where the series takes it next.
-
-The module below was validated with Terraform 1.15.8, and the transcripts are
-from a scratch repository built for this post. Secret names are generic
+Validated with Terraform 1.15.8 against a scratch repository; secret names are
 placeholders.
 
 ## The credential sprawl problem
@@ -105,10 +97,14 @@ locals {
 
   merged_secret_paths = merge(local.secret_paths, var.custom_paths)
 
-  requested_secrets = length(var.terraform_providers) > 0 ? {
-    for k, v in local.merged_secret_paths : k => v
-    if contains(var.terraform_providers, k)
-  } : local.merged_secret_paths
+  requested_secrets = (
+    length(var.terraform_providers) == 0
+    ? local.merged_secret_paths
+    : {
+      for k, v in local.merged_secret_paths :
+      k => v if contains(var.terraform_providers, k)
+    }
+  )
 }
 ```
 
@@ -117,13 +113,11 @@ per-instance secret keeps a shared name: a stack managing one Postgres cluster
 passes `custom_paths = { postgresql = "infrastructure/postgres/cluster-a" }` and
 reads it as `postgresql` like everything else.
 
-What remains is the read and the output. A third variable, `create`, defaults to
-`true` and exists so a caller can switch the reads off without removing the
-module block:
+What remains is the read and the output:
 
 ```hcl
 data "aws_secretsmanager_secret_version" "providers" {
-  for_each = var.create ? local.requested_secrets : {}
+  for_each = local.requested_secrets
 
   secret_id = each.value
 }
@@ -144,11 +138,11 @@ needs no change here, and a consumer reads
 
 ## Validating the request
 
-A name that is not in the registry is the one mistake worth catching early, and
-a [`validation`](https://developer.hashicorp.com/terraform/language/block/variable)
+A name that is not in the registry is the mistake worth catching early, and a
+[`validation`](https://developer.hashicorp.com/terraform/language/block/variable)
 block on the variable catches it. The condition reads
-`local.merged_secret_paths`, which is a reference out of the variable and into
-the rest of the module:
+`local.merged_secret_paths`, a reference out of the variable and into the rest
+of the module, which Terraform allows since 1.9:
 
 ```hcl
 validation {
@@ -191,7 +185,7 @@ argument in the output:
 
 ```hcl
 data "google_secret_manager_secret_version" "providers" {
-  for_each = var.create ? local.requested_secrets : {}
+  for_each = local.requested_secrets
 
   secret = each.value
 }
@@ -244,13 +238,13 @@ declares. The module assumes nothing about where it reads from.
 
 Secret data read through a `data` block is stored in the state file in
 plaintext. That is a property of Terraform, not of this module, and it applies
-equally to the three-line data source it replaces. What centralizing the reads
+equally to the data source it replaces. What centralising the reads
 adds is how easy it becomes to pull more secrets into a stack than that stack’s
 state should hold.
 
 The identity running a stack needs read access to every secret its requested
 names resolve to. The default is to read the whole registry, so a module call
-with no `terraform_providers` asks for all of them. Pass the list.
+with no `terraform_providers` asks for all of them; pass the list.
 
 Secret values are read at plan time and baked into the plan, so rotating a
 credential requires a new plan rather than an apply of the existing one.

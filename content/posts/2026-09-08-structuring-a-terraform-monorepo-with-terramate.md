@@ -9,24 +9,19 @@ categories:
 
 A repository layout for a Terraform monorepo managed with
 [**Terramate**](https://terramate.io/docs/cli/), where a stack’s position in the
-tree supplies its account, its region and its environment. It covers the three
-directories that carry code, how the path stands in for configuration, what a
-single stack directory holds, and how change detection reads the layout. This
-is the first post in a series on Terraform and Terramate.
+tree supplies its account, its region and its environment, so adding a stack is
+one command and no copied files: the backend, the providers and the shared
+globals arrive from imports, and the only hand-written file in the new
+directory is the one that calls modules. This is the first post in a series on
+Terraform and Terramate.
 
-With this layout, adding a stack is one command and no copied files. The
-backend block, the provider blocks and the shared globals arrive from imports,
-and the only hand-written file in the new directory is the one that calls
-modules.
-
-The commands below were run against a scratch repository built for this post
-with Terramate 0.17.3 and Terraform 1.15.8. The layout itself comes from a
-private monorepo of 508 stacks and 95 modules, so account names and profiles
-are placeholders.
+Commands were run against a scratch repository with Terramate 0.17.3 and
+Terraform 1.15.8; the layout comes from a private monorepo of 508 stacks and 95
+modules, so account names and profiles are placeholders.
 
 ## The layout problem
 
-The default layout for multi-account Terraform is a directory per environment
+The usual layout for multi-account Terraform is a directory per environment
 with the same files copied into each: `development/`, `staging/` and
 `production/`, each holding its own `backend.tf`, `providers.tf` and `main.tf`.
 It is fine at three environments and one account.
@@ -62,7 +57,7 @@ for each is short:
 | `modules/` | reusable modules the stacks call | referenced by relative path from inside the repository |
 | `stacks/imports/` | shared `*.tm.hcl` fragments | the only place a `generate_hcl` block lives |
 
-Keeping `modules/` in the same repository is what makes change detection
+Keeping `modules/` in the same repository makes change detection
 transitive. Terramate parses the `module` blocks in a stack’s `*.tf` files and
 follows local sources, so a commit that touches nothing but a module marks the
 stacks that call it as changed:
@@ -132,13 +127,13 @@ A stack three levels down declares none of this, so relocating one to another
 region is a `git mv` followed by a regeneration:
 
 ```bash
-git mv stacks/aws/acme-development/eu-west-1/acm-v2 \
-       stacks/aws/acme-development/us-east-1/acm-v2
+git mv stacks/aws/acme-development/eu-west-1/acm \
+       stacks/aws/acme-development/us-east-1/acm
 terramate generate
 # [~] 000_terramate_generated_terraform.tf
 # [~] 001_terramate_generated_providers.tf
 
-cd stacks/aws/acme-development/us-east-1/acm-v2
+cd stacks/aws/acme-development/us-east-1/acm
 grep -E 'bucket|key |region' 000_terramate_generated_terraform.tf
 #     bucket         = "tf-state-use1-111111111111"
 #     key            = "terraform/stacks/by-id/<stack-id>/terraform.tfstate"
@@ -148,10 +143,10 @@ grep -E 'bucket|key |region' 000_terramate_generated_terraform.tf
 The provider region and the state bucket follow the new path, and nothing in
 the stack directory was edited. The state key does not follow, because it is
 derived from the stack’s Terramate-assigned identifier rather than its
-location, so the state object moves to the new bucket under the same key; that
-copy is the procedure
+location, so the state object has to be copied to the new bucket under the
+same key, the same copy
 [the migration post](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/)
-covers.
+uses.
 
 ## Stack anatomy
 
@@ -159,7 +154,7 @@ A stack directory holds exactly three kinds of file: the marker, the generated
 files, and the Terraform someone wrote.
 
 ```text
-stacks/aws/acme-development/eu-west-1/acm/
+stacks/aws/acme-development/eu-west-1/acm-v2/
 ├── stack.tm.hcl                          the marker
 ├── 000_terramate_generated_terraform.tf  backend, from imports
 ├── 001_terramate_generated_providers.tf  providers, from imports
@@ -171,7 +166,7 @@ The marker is a `stack` block carrying a name, a description and an identifier:
 ```hcl title="stacks/aws/acme-development/eu-west-1/acm-v2/stack.tm.hcl"
 stack {
   name        = "acm-v2"
-  description = "acm-v2"
+  description = "ACM certificates for the public API"
   id          = "a55dd02a-628e-4dc6-89a7-2fb83537a9c2"
 }
 ```
@@ -201,8 +196,7 @@ regenerated from the `*.tm.hcl` sources and committed, which keeps
 `terramate generate --detailed-exit-code` to fail a branch whose committed
 output is stale.
 
-The resulting ratio is the argument for the layout. Counting the
-repository this comes from: 15 files in `stacks/imports`, **2,040 lines** of
+Counting the repository this comes from: 15 files in `stacks/imports`, **2,040 lines** of
 generator, produce **1,954 files and 63,618 lines** of Terraform across 508
 stacks. None of it is reviewed line by line, because none of it was written by
 anyone.
@@ -232,7 +226,7 @@ as long as that takes.
 The generators referenced above are where the layout pays off, and they need one
 thing the tree cannot give them: credentials.
 [One Terraform module for provider credentials](/blog/posts/one-terraform-module-for-provider-credentials/)
-covers the module every stack reads them through, and
+covers the module stacks read them through, and
 [Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/)
 takes apart the generator that wires the two together. For the version
 constraints those generators emit, see

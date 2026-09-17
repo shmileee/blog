@@ -8,33 +8,28 @@ categories:
 ---
 
 A pattern for generating Terraform provider configuration from a single
-generator instead of copying `provider` blocks into every root module. It covers
-declaring providers as hierarchical [**Terramate**](https://terramate.io/docs/cli/)
-globals, rendering them with `generate_hcl`, keeping aliases out of the version
-constraints, and referencing credentials the stack never spells out. It is the
-third post in a series on Terraform and Terramate, after
+[**Terramate**](https://terramate.io/docs/cli/) generator instead of copying
+`provider` blocks into every root module: a stack declares which providers it
+needs and nothing else, and the version constraint, the `provider` block and
+the credential plumbing are derived from that declaration. It is the third post
+in a series on Terraform and Terramate, after
 [the repository layout](/blog/posts/structuring-a-terraform-monorepo-with-terramate/)
 these generators live in and
 [the module](/blog/posts/one-terraform-module-for-provider-credentials/) they read
 secrets through.
 
-With this in place a stack declares which providers it needs and nothing else.
-The version constraint, the `provider` block and the credential plumbing are
-all derived from that declaration.
-
 The layout assumed throughout is `stacks/aws/<account-alias>/<region>/<stack>`,
-with Terramate globals declared at each level and inherited downward. Everything
-below was tested with Terramate 0.17.3 and Terraform 1.15.8. The snippets come
-from a minimal reproduction of a pattern that runs in a private repository, so
-account names, profiles and secret paths are placeholders.
+with Terramate globals declared at each level and inherited downward. Tested
+with Terramate 0.17.3 and Terraform 1.15.8; account names, profiles and secret
+paths are placeholders.
 
 ## The provider boilerplate problem
 
 A monorepo of Terraform root modules repeats the same three things in every
 stack: a `required_providers` block, one `provider` block per provider with the
 region and credentials filled in, and an `alias` variant of it for each account
-the stack reaches into. None of it describes infrastructure. All of it is
-load-bearing, and it is copy-pasted.
+the stack reaches into. None of it describes infrastructure. All of it has to
+be right, and it is copy-pasted.
 
 The cost shows up on every change that crosses stacks. Moving the AWS provider
 from `~> 5.0` to `~> 6.0` is one edit per root module, and a stack that was
@@ -88,10 +83,7 @@ globals "terraform" "providers" "aws" {
   version = "~> 5.0"
   config = {
     region  = global.region_name
-    profile = tm_try(
-      global.aws_config_profile,
-      terramate.stack.path.basename,
-    )
+    profile = global.aws_config_profile
   }
 }
 ```
@@ -120,9 +112,9 @@ the root of each subtree. Terraform allows
 [one version constraint per provider](https://developer.hashicorp.com/terraform/language/providers/requirements)
 across the whole configuration, so an alias must produce a `provider` block and
 no `required_providers` entry. Keeping the alias in the key,
-`aws.shared-services`, is what lets the
-[`lets`](https://terramate.io/docs/cli/code-generation/variables/lets) section
-tell the two apart:
+`aws.shared-services`, is how the generator’s
+[`lets`](https://terramate.io/docs/cli/code-generation/variables/lets) tell the
+two apart:
 
 ```hcl
 lets {
@@ -132,12 +124,18 @@ lets {
       source  = v.source
       version = v.version
     }
-    if tm_alltrue([
-      tm_try(v.enabled, true),
-      tm_length(tm_split(".", k)) == 1,
-    ])
+    if tm_try(v.enabled, true) && tm_length(tm_split(".", k)) == 1
   }
-  # ... providers: the same filter; providers_aliases: == 2 instead ...
+  providers = {
+    for k, v in tm_try(global.terraform.providers, {}) :
+    k => v
+    if tm_try(v.enabled, true) && tm_length(tm_split(".", k)) == 1
+  }
+  providers_aliases = {
+    for k, v in tm_try(global.terraform.providers, {}) :
+    k => v
+    if tm_try(v.enabled, true) && tm_length(tm_split(".", k)) == 2
+  }
 }
 ```
 
@@ -161,7 +159,7 @@ content {
     attributes = tm_merge(
       provider.value.config,
       {
-        for k, v in provider.value.config_partial :
+        for k, v in tm_try(let.credentials[provider.key], {}) :
         k => tm_hcl_expression(v)
       },
     )
@@ -215,31 +213,59 @@ Most SaaS providers need a token, and the token comes from the
 [lookup module](/blog/posts/one-terraform-module-for-provider-credentials/) that
 part two covers. A generated attribute is rendered as a value, so a reference
 to that module’s output would land in the output file as a quoted string. The
-generator keeps such references as strings and converts them with
+generator keeps the references as strings and converts them with
 [`tm_hcl_expression`](https://terramate.io/docs/cli/code-generation/functions/tm_hcl_expression),
-which emits a string as verbatim HCL:
+which emits a string as verbatim HCL. References that become attributes are
+kept apart from those that belong inside a nested block, because a block needs
+a `tm_dynamic` of its own:
 
 ```hcl
-default_config_partials = {
-  static = {
+lets {
+  secrets = "module.providers_credentials.secrets"
+
+  credentials = {
     pagerduty = {
-      token = "module.${let.credentials_module}.secrets.pagerduty.api_token"
+      token = "${let.secrets}.pagerduty.api_token"
     }
   }
-  dynamic = {
+
+  credential_blocks = {
     github = {
-      id              = "module.${let.credentials_module}.secrets.github.app_id"
-      installation_id = "module.${let.credentials_module}.secrets.github.app_installation_id"
-      pem_file        = "base64decode(module.${let.credentials_module}.secrets.github.private_key_b64)"
+      app_auth = {
+        id              = "${let.secrets}.github.app_id"
+        installation_id = "${let.secrets}.github.app_installation_id"
+        pem_file        = "base64decode(${let.secrets}.github.private_key_b64)"
+      }
     }
   }
 }
 ```
 
-`static` entries become attributes and `dynamic` ones nested blocks, here
-GitHub’s `app_auth`. The module is instantiated only in a stack that enables a
-provider with a partial, with exactly those names requested. For a stack
-enabling `github` and `pagerduty`:
+The `content` block above merges `let.credentials` into each provider’s
+attributes; a nested block is rendered inside the provider’s own `content`,
+conditioned on the provider that has one:
+
+```hcl
+tm_dynamic "provider" {
+  for_each = let.providers
+  labels   = [provider.key]
+  # ... the attributes merge as above ...
+
+  content {
+    tm_dynamic "app_auth" {
+      condition = provider.key == "github"
+      attributes = {
+        for k, v in let.credential_blocks.github.app_auth :
+        k => tm_hcl_expression(v)
+      }
+    }
+  }
+}
+```
+
+The module block is generated the same way, only in a stack whose enabled
+providers appear in one of the two maps, with that intersection as
+`terraform_providers`. For a stack enabling `github` and `pagerduty`:
 
 ```hcl title="stacks/saas/github/001_terramate_generated_providers.tf"
 module "providers_credentials" {
@@ -271,17 +297,14 @@ Because the output is committed and generation is
 [enforced in continuous integration](/blog/posts/structuring-a-terraform-monorepo-with-terramate/),
 a provider change arrives in review as one edit to a declaration plus the exact
 set of stacks it rewrites. Moving the AWS provider to the next major version is
-a single `version` field in `stacks/imports/aws/provider.tm.hcl`. In the
-repository this comes from, that one field feeds **445 generated provider
+a single `version` field in `stacks/imports/aws/provider.tm.hcl`. In a
+repository of 508 stacks, that one field feeds **445 generated provider
 blocks**. The diff that comes with it names every stack that picks the change
 up, and `terramate list --changed` on the branch is the list the pipeline will
 plan.
 
 A major upgrade is still a large mechanical commit, and splitting it by subtree
-reviews better than landing every stack at once. The
-[command reference](https://terramate.io/docs/cli/reference/cmdline/generate)
-covers the rest of the generation flags, including `--changed` for generating
-only in stacks touched by the current branch.
+reviews better than landing every stack at once.
 
 ## Limitations
 
@@ -289,9 +312,9 @@ The single-version rule is Terraform’s, not Terramate’s. A stack that genuin
 needs two major versions of one provider cannot be expressed this way, because
 the alias shares the constraint emitted for the base provider.
 
-Everything inside `config_partial` is a string until `tm_hcl_expression` pastes
-it into the output, so `terramate generate` will happily render a reference to
-an output that does not exist. The error surfaces at `terraform init` or
+Every credential reference is a string until `tm_hcl_expression` pastes it
+into the output, so `terramate generate` will happily render a reference to an
+output that does not exist. The error surfaces at `terraform init` or
 `terraform validate`, one step later than the mistake.
 
 Attributes come from the declaration, but blocks do not. A provider whose

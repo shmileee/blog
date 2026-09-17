@@ -9,14 +9,12 @@ categories:
 
 An inventory of every stack in a Terramate repository and where each one is
 deployed, assembled from the same packages the `terramate` command uses rather
-than from the directory tree. It covers what the nesting costs a reader, the
-four calls that produce the inventory, and what a terminal user interface over
-it adds. It is the sixth post in a series on Terraform and Terramate, after
+than from the directory tree. It is the sixth post in a series on Terraform and
+Terramate, after
 [Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/).
 
-The inventory program below was written and run for this post against a scratch
-repository, with Terramate 0.17.3 and Terraform 1.15.8. Account names are
-placeholders.
+The inventory program was written and run against a scratch repository with
+Terramate 0.17.3 and Terraform 1.15.8; account names are placeholders.
 
 ## What the deep tree costs
 
@@ -111,8 +109,8 @@ single value out is a key-path lookup that returns a `cty` value, so a small
 
 Two practical notes. The library logs through `zerolog` at debug level, so
 `zerolog.SetGlobalLevel(zerolog.Disabled)` belongs at the top of `main`. And
-`findRoot` walking up to `terramate.tm.hcl` is what makes the tool runnable from
-any stack directory, which matters more than it sounds: the question is usually
+`findRoot` walking up to `terramate.tm.hcl` makes the tool runnable from any
+stack directory, which matters more than it sounds: the question is usually
 asked from deep inside the tree.
 
 Under a hundred lines, that is a complete non-interactive inventory:
@@ -129,9 +127,8 @@ STACK                                         ACCOUNT           REGION     ENV
 ## The explorer
 
 I built the tool I use for this and called it `terramate-stacks-explorer`. It
-is an in-house Go binary rather than something you can install from anywhere,
-so what follows is what it does and what it needs, on the assumption you would
-build your own.
+is an in-house Go binary rather than something you can install, so what follows
+is what it does and what it needs.
 
 It has two views over the same data. The default one is by identity, which is
 the question the deep tree makes hard to answer:
@@ -259,6 +256,6 @@ closest thing to an answer, and it only reports on the code.
 
 Every post in this series so far assumes the declarations are right: a stack
 names its providers, a descriptor names its platforms, a global names its
-account. The next one covers what happens when one of them is wrong, and why a
+account. A later post covers what happens when one of them is wrong, and why a
 generator is the right place to refuse: `assert` blocks, and the version
 contracts they let a shared generator enforce before Terraform ever runs.

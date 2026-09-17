@@ -8,20 +8,16 @@ categories:
 ---
 
 Moving a flat Terraform repository into Terramate stacks, one stack at a time,
-without destroying or moving anything. It covers the order to migrate in, why
-the state object is copied rather than moved, the plan that tells you a
-migration worked, and how the whole procedure ends up being something an agent
-can drive. It is the fifth post in a series on Terraform and Terramate, after
+without destroying or moving anything. The procedure is deliberately boring,
+and the gate at the end of it is mechanical enough to hand to someone, or
+something, that has never seen the stack before. It is the fifth post in a
+series on Terraform and Terramate, after
 [Generating Terraform for teams from one JSON file](/blog/posts/generating-terraform-for-teams-from-one-json-file/).
 
-The procedure is deliberately boring: nothing is destroyed, nothing is moved,
-and the gate is mechanical enough to hand to someone, or something, that has
-never seen the stack before.
-
-Versions below are Terramate 0.17.3 with Terraform 1.15.8. The procedure is the
-one used on a private monorepo of 508 stacks, where **85 legacy stacks have
-moved this way so far** and 30 are still waiting; buckets, keys and account
-names are placeholders.
+Versions are Terramate 0.17.3 with Terraform 1.15.8. The procedure is the one
+used on a private monorepo of 508 stacks, where **85 legacy stacks have moved
+this way so far** and 30 are still waiting; buckets, keys and account names are
+placeholders.
 
 ## One stack at a time, in the right order
 
@@ -44,10 +40,10 @@ Classify before starting:
 | Review | several provider aliases, git-ref module sources, provider major differs from the framework default | migrate with care |
 | Hold | reads or is read via `terraform_remote_state`, owns shared networking or DNS, inline secrets in `*.tf` | migrate later, as a group |
 
-The `terraform_remote_state` rule is the one that bites. A producer and its
-consumers have to move together, or the producer first: copying a producer’s
-state to a new key while a consumer still reads the old one leaves the consumer
-reading a snapshot that stops being updated.
+The `terraform_remote_state` rule exists because a producer and its consumers
+have to move together, or the producer first: copying a producer’s state to a
+new key while a consumer still reads the old one leaves the consumer reading a
+snapshot that stops being updated.
 
 ## Copy the state, never move it
 
@@ -188,8 +184,8 @@ A single comment listing several directories does not work, and a bare
 project. One directory per comment, waiting for each to report success, is the
 only sequence that behaves.
 
-Running several migrations at once is where an agent earns its place, and git
-worktrees are what make that safe:
+Running several migrations at once is where an agent pays off, and git
+worktrees make it safe:
 
 ```bash
 git worktree add ../migrate-<stack> -b migrate/<stack>-to-terramate
@@ -214,9 +210,8 @@ applied: an apply there after the copy changes infrastructure that the new
 stack will then want to revert. Freeze the legacy directory once its object is
 copied, and delete it in the migration pull request.
 
-The state copy needs credentials for the destination account, which is the one
-step in the procedure that cannot be delegated to continuous integration.
-Everything else is a pull request.
+The state copy needs credentials for the destination account, so it cannot be
+delegated to continuous integration; everything else is a pull request.
 
 The preflight classification is advisory. It reads provider blocks, remote-state
 references and recent churn, all of which are proxies; a stack can look like a
