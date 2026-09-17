@@ -37,7 +37,7 @@ Classify before starting:
 | Class | Signals | Action |
 | --- | --- | --- |
 | Go | single AWS context, no remote-state coupling, rarely changes | migrate now |
-| Review | several provider aliases, git-ref module sources, provider major differs from the framework default | migrate with care |
+| Review | several provider aliases, git-ref module sources, provider major differs from the generated constraint | migrate with care |
 | Hold | reads or is read via `terraform_remote_state`, owns shared networking or DNS, inline secrets in `*.tf` | migrate later, as a group |
 
 The `terraform_remote_state` rule exists because a producer and its consumers
@@ -152,7 +152,8 @@ So the runbook became a skill, a Markdown file an
 [OpenCode](https://opencode.ai) agent loads on demand, which names the steps and
 the rules it may not negotiate:
 
-- **Hold by default.** A stack migrates only if the preflight clears it.
+- **Hold by default.** A stack migrates only if the classification above
+  clears it.
   Anything high-blast-radius or coupled is reported and left for a human.
 - **Copy state, never move it.** No `terraform state mv`, no deleting the legacy
   object.
@@ -201,8 +202,9 @@ Atlantis scans it, each with its own branch, pull request and agent. The paths
 each migration touches are disjoint, and the shared imports are never modified,
 so the runs do not collide.
 
-They do collide on one file. Every migration pull request edits `CODEOWNERS`
-to drop the rule for the legacy directory it deleted, so the first one to
+They do collide on one file. Every migration pull request edits `CODEOWNERS`,
+the file GitHub routes reviews by, to drop the rule for the legacy directory it
+deleted, so the first one to
 merge leaves the others based on a stale branch with a conflict in exactly
 that file. It is mechanical to fix, rebase and re-plan, but it is worth
 knowing before three agents report the same failure at once.
@@ -218,7 +220,7 @@ copied, and delete it in the migration pull request.
 The state copy needs credentials for the destination account, so it cannot be
 delegated to continuous integration; everything else is a pull request.
 
-The preflight classification is advisory. It reads provider blocks, remote-state
+The classification is advisory. It reads provider blocks, remote-state
 references and recent churn, all of which are proxies; a stack can look like a
 clean candidate and still be the one nobody wants replanned on a Friday. The
 gate catches mistakes, the classification only orders the work.

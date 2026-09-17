@@ -26,17 +26,16 @@ platform names are generic.
 
 A team exists in more places than the org chart. It is a GitHub team with
 repository permissions, a Slack channel, an on-call schedule with an escalation
-policy, an entry in the service catalogue, and the links between them: the
-escalation policy points at the channel, the catalogue entry names the GitHub
-team. Each of those lives in a different system with its own admin console, and
-a team assembled through the consoles is exactly as consistent as the person who
-clicked through them that day.
+policy, and the links between them: the escalation policy points at the
+channel, the channel topic names the team. Each of those lives in a different
+system with its own admin console, and a team assembled through the consoles
+is exactly as consistent as the person who clicked through them that day.
 
 Declaring teams as code gives them what infrastructure already has. One
 declaration produces the same footprint in every system; every change is a
 reviewed pull request with a history behind it; a channel renamed by hand shows
 up as drift in the next plan; and removing a team is the reverse of creating
-one rather than a search through four consoles. The policy, which platforms a
+one rather than a search through three consoles. The policy, which platforms a
 team gets and how they are named and connected, is written once, and every
 team gets the same one.
 
@@ -153,7 +152,8 @@ reject hyphens.
 ## One generated file per platform
 
 Each platform gets its own `generate_hcl` block, guarded by whether the
-descriptor mentions it at all:
+descriptor mentions it at all. As in the provider generator, functions
+prefixed `tm_` are Terraform’s, run at generation time:
 
 ```hcl
 generate_hcl "100_terramate_generated_github_teams.tf" {
@@ -187,7 +187,7 @@ generate_hcl "100_terramate_generated_github_teams.tf" {
 
 A block whose condition is false produces no file, so the generated files mirror
 the descriptor’s top-level keys. Two teams, one with three platforms and one
-with none, generate this:
+with an empty descriptor, generate this (`[+]` marks a file written):
 
 ```text
 terramate generate
@@ -199,8 +199,8 @@ terramate generate
 #     [+] 000_terramate_generated_terraform.tf
 #     [+] 001_terramate_generated_providers.tf
 #     [+] 100_terramate_generated_github_teams.tf
-#     [+] 102_terramate_generated_slack.tf
-#     [+] 103_terramate_generated_oncall.tf
+#     [+] 101_terramate_generated_slack.tf
+#     [+] 102_terramate_generated_oncall.tf
 ```
 
 The backend and provider files come from the shared imports covered in
@@ -244,8 +244,9 @@ back into its default, which is why some modules survive this and others do
 not. Generating nothing is the only form that means “use the default” in all
 three cases.
 
-The second is that generated files may reference each other. The on-call
-generator sets `escalation_channel` from the Slack module, and has to decide at
+The second is that generated files may reference each other. The Slack
+generator emits a `module "slack"` whose `name` output is the channel; the
+on-call generator sets `escalation_channel` from it, and has to decide at
 generation time whether that module will exist:
 
 ```hcl
@@ -289,8 +290,8 @@ echo '{}' > stacks/teams/team-platform/team.json
 terramate generate
 # - /stacks/teams/team-platform
 #     [-] 100_terramate_generated_github_teams.tf
-#     [-] 102_terramate_generated_slack.tf
-#     [-] 103_terramate_generated_oncall.tf
+#     [-] 101_terramate_generated_slack.tf
+#     [-] 102_terramate_generated_oncall.tf
 ```
 
 The module calls are gone from the configuration, so the next plan is a destroy

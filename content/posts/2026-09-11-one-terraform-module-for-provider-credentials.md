@@ -23,11 +23,12 @@ placeholders.
 
 ## The credential sprawl problem
 
-The PagerDuty provider needs a token before it can do anything. In a stack that
-keeps it in AWS Secrets Manager, that is an
+The PagerDuty provider needs a token before it can do anything. In a root
+module that keeps it in AWS Secrets Manager (laid out the pre-Terramate way
+here, one directory per environment), that is an
 [`aws_secretsmanager_secret_version`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/secretsmanager_secret_version)
-data source, a `jsondecode` and a key lookup, all in the root module next to
-the provider block they feed:
+data source, a `jsondecode` and a key lookup, all next to the provider block
+they feed:
 
 ```hcl title="app/oncall/production/providers.tf"
 data "aws_secretsmanager_secret_version" "pagerduty" {
@@ -140,7 +141,7 @@ needs no change here, and a consumer reads
 
 A name that is not in the registry is the mistake worth catching early, and a
 [`validation`](https://developer.hashicorp.com/terraform/language/block/variable)
-block on the variable catches it. The condition reads
+block inside `variable "terraform_providers"` catches it. The condition reads
 `local.merged_secret_paths`, a reference out of the variable and into the rest
 of the module, which Terraform allows since 1.9:
 
@@ -231,8 +232,9 @@ declaration; that generator is the next post.
 
 Secrets often live in a different account from the resources a stack manages.
 Where they do, the caller passes the reader explicitly,
-`providers = { aws = aws.shared-services }`, naming an alias the stack already
-declares. The module assumes nothing about where it reads from.
+`providers = { aws = aws.shared-services }`, naming an aliased AWS provider the
+stack already declares (part three generates those aliases). The module assumes
+nothing about where it reads from.
 
 ## Limitations
 

@@ -113,8 +113,9 @@ the root of each subtree. Terraform allows
 across the whole configuration, so an alias must produce a `provider` block and
 no `required_providers` entry. Keeping the alias in the key,
 `aws.shared-services`, is how the generator’s
-[`lets`](https://terramate.io/docs/cli/code-generation/variables/lets) tell the
-two apart:
+[`lets`](https://terramate.io/docs/cli/code-generation/variables/lets), its
+local values, tell the two apart. Functions prefixed `tm_` are Terraform’s
+functions run by Terramate at generation time:
 
 ```hcl
 lets {
@@ -143,7 +144,8 @@ The `content` block renders the maps with
 [`tm_dynamic`](https://terramate.io/docs/cli/code-generation/generate-hcl#the-tm-dynamic-block):
 a `required_providers` block from the first, one `provider` block per entry of
 the second, each carrying its own `config` merged with the credential references
-covered in the next section:
+covered in the next section. Inside a `tm_dynamic` the current entry is named
+after the block label, here `provider`:
 
 ```hcl
 content {
@@ -291,10 +293,22 @@ content {
 }
 ```
 
-A SaaS stack declares its providers the same way the region declared AWS,
-with whatever configuration is not a credential:
+A SaaS stack sits outside the account tree, so it declares its own providers
+the way the region declared AWS, with whatever configuration is not a
+credential. It still needs an AWS provider, because that is what the lookup
+module reads Secrets Manager through:
 
 ```hcl title="stacks/saas/github/providers.tm.hcl"
+globals "terraform" "providers" "aws" {
+  enabled = true
+  source  = "hashicorp/aws"
+  version = "~> 5.0"
+  config = {
+    region  = "eu-west-1"
+    profile = "acme-shared-services"
+  }
+}
+
 globals "terraform" "providers" "github" {
   enabled = true
   source  = "integrations/github"
@@ -311,11 +325,11 @@ globals "terraform" "providers" "pagerduty" {
 }
 ```
 
-Both have credential entries, so the stack gets the module block, and each
-provider gets its references:
+GitHub and PagerDuty have credential entries, so the stack gets the module
+block and each of those providers gets its references:
 
 ```hcl title="stacks/saas/github/001_terramate_generated_providers.tf"
-// ... terraform { required_providers { github, pagerduty } } ...
+// ... required_providers for aws, github and pagerduty; provider "aws" ...
 
 module "providers_credentials" {
   source = "../../../modules/providers-credentials"

@@ -155,7 +155,9 @@ terramate-stacks-explorer --format table
 ```
 
 The other view is by deployment, one row per place a stack actually runs, and
-both views take the same `--group`, `--env` and `--region` filters:
+both views take the same `--group`, `--env` and `--region` filters. A group is
+the account name up to its first hyphen, `acme` for `acme-production`, or the
+path segment for a stack without an account:
 
 ```text
 terramate-stacks-explorer --view deployments --env production --format table
@@ -212,7 +214,8 @@ them at the account and region level, once, rather than per stack.
 
 Three things make the interactive version worth the extra work, none of which a
 table can do: fuzzy filtering by account, region or environment; grouping
-deployments under one identity in lifecycle order rather than alphabetically;
+deployments under one identity in lifecycle order, development before staging
+before production, rather than alphabetically;
 and acting on a selection, where opening a subshell in the stack’s directory
 turns “where does this run” into “put me there”.
 [Bubble Tea](https://github.com/charmbracelet/bubbletea) is the obvious toolkit

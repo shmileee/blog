@@ -8,11 +8,12 @@ categories:
 ---
 
 A repository layout for a Terraform monorepo managed with
-[**Terramate**](https://terramate.io/docs/cli/), where a stack’s position in the
-tree supplies its account, its region and its environment, so adding a stack is
-one command and no copied files: the backend, the providers and the shared
-globals arrive from imports, and the only hand-written file in the new
-directory is the one that calls modules. This is the first post in a series on
+[**Terramate**](https://terramate.io/docs/cli/), where a stack, Terramate’s name
+for one root module and its directory, gets its account, its region and its
+environment from its position in the tree. Adding a stack is one command and
+no copied files: the backend and provider blocks are generated from shared
+declarations, and the only hand-written file in the new directory is the one
+that calls modules. This is the first post in a series on
 Terraform and Terramate.
 
 Commands were run against a scratch repository with Terramate 0.17.3 and
@@ -57,9 +58,17 @@ for each is short:
 | `modules/` | reusable modules the stacks call | referenced by relative path from inside the repository |
 | `stacks/imports/` | shared `*.tm.hcl` fragments | the only place a `generate_hcl` block lives |
 
-Keeping `modules/` in the same repository makes change detection
-transitive. Terramate parses the `module` blocks in a stack’s `*.tf` files and
-follows local sources. The `acm` stack’s hand-written file calls one module:
+`*.tm.hcl` files are Terramate’s own configuration. Three kinds of block in
+them matter here: `globals` declares values for a directory and everything
+below it; `generate_hcl` is a generator, which renders one Terraform file into
+every stack under it from those values; `import` pulls a `*.tm.hcl` file from
+`stacks/imports/` into a directory, which is how a generator or a shared
+declaration reaches a subtree.
+
+Keeping `modules/` in the same repository makes change detection transitive:
+Terramate compares the branch with the default branch, parses the `module`
+blocks in a changed stack’s `*.tf` files and follows local sources. The `acm`
+stack’s hand-written file calls one module:
 
 ```hcl title="stacks/aws/acme-development/eu-west-1/acm/main.tf"
 module "certificate" {
@@ -85,13 +94,12 @@ continuous integration plans the wrong set of stacks.
 
 ## Path as identity
 
-Terramate globals are defined per directory and inherited by everything below,
-so the directory a file sits in decides its scope. That turns the path into the
-declaration:
+Globals are inherited by everything below the directory that declares them,
+so the directory a file sits in decides its scope. That turns the path into
+the declaration:
 
 ```text
 stacks/
-├── config.tm.hcl                     repo-wide globals
 ├── imports/                          shared generators
 │   ├── 000_terraform.tm.hcl          the S3 backend
 │   └── 001_providers.tm.hcl          the providers
@@ -108,7 +116,9 @@ stacks/
 ```
 
 `aws.tm.hcl` pulls the two generators into the subtree, so every stack below it
-gets a backend file and a providers file:
+gets a backend file and a providers file (the backend generator is shown below;
+the providers generator is
+[part three](/blog/posts/generating-terraform-providers-with-terramate/)):
 
 ```hcl title="stacks/aws/aws.tm.hcl"
 import {
@@ -132,8 +142,8 @@ globals {
 }
 ```
 
-A region directory states the region, and pulls in the provider defaults that
-depend on it:
+A region directory states the region, and pulls in the AWS provider
+declaration that depends on it (its contents are also part three’s):
 
 ```hcl title="stacks/aws/acme-development/eu-west-1/region.tm.hcl"
 globals {
@@ -177,8 +187,8 @@ grep region stacks/aws/acme-development/us-east-1/acm/001*.tf
 #   region  = "us-east-1"
 ```
 
-The provider region follows the new path, and nothing in the stack directory
-was edited. The backend file did not change at all: the bucket is the
+`[~]` is Terramate’s mark for a file it rewrote. The provider region follows
+the new path, and nothing in the stack directory was edited. The backend file did not change at all: the bucket is the
 account’s and the key is the stack’s, and the move touched neither, so no
 state object moved either. A move between accounts is the case that changes
 the bucket, and then the object is copied to the new bucket under the same
@@ -228,7 +238,8 @@ written from the imports above it.
 
 The numeric prefixes keep that listing stable and say where each file came from:
 `000` for the backend, `001` to `099` for shared imports, `100` and up for
-per-stack generators. Nothing in these files is edited by hand. They are
+generators that belong to one subtree (part four’s team generators live
+there). Nothing in these files is edited by hand. They are
 regenerated from the `*.tm.hcl` sources and committed, which keeps
 `terraform plan` working from a plain checkout, and continuous integration runs
 `terramate generate --detailed-exit-code` to fail a branch whose committed
