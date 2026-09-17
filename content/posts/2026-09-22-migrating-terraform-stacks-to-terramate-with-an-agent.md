@@ -1,6 +1,6 @@
 ---
 title: Migrating Terraform stacks to Terramate with an agent
-description: A per-stack Terraform migration behind a tags-only plan gate, driven by an agent through Atlantis.
+description: A per-stack Terraform migration behind an empty-plan gate, driven by an agent through Atlantis.
 date: 2026-09-22 09:00:00
 categories:
   - terraform
@@ -107,31 +107,25 @@ the copy left behind as an orphan. Comparing `ETag` and `ContentLength` on both
 objects afterwards is a cheap integrity check; state files are usually a single
 part, so a matching `ETag` is a strong signal.
 
-## The tags-only plan gate
+## The plan gate
 
 A migrated stack should manage exactly the resources it managed before, and the
-plan on the pull request is where that is proven. It is never an empty plan,
-though, and that is the part worth internalising: the generated provider adds
-`default_tags`, so the first plan after the move reconciles tags on everything
-the stack owns.
+plan on the pull request is where that is proven. With the state copied
+byte-for-byte and the code moved rather than rewritten, Terraform refreshes
+every resource in the copied state, compares it with the moved configuration,
+and finds nothing to do.
 
 That gives a gate precise enough to delegate. The migration passes when the
-plan contains **only** `tags` and `tags_all` changes, and zero creates,
-replaces, destroys or non-tag attribute changes. A stack that already carried
-the framework’s four default tags shows one addition, the generated stack
-identifier; a stack with no default tags at all shows five. Tag-only
-reconciliation on a state-copied stack is the AWS provider’s documented
-behaviour, discussed at length in [provider issue
-32857](https://github.com/hashicorp/terraform-provider-aws/issues/32857).
-
-Anything beyond tags means stop, and the diagnosis order matters more than the
-list:
+plan reports **no changes**: zero creates, replaces, destroys or attribute
+updates. Anything else means stop, and the diagnosis order matters more than
+the list:
 
 1. **Provider version drift**: the generated constraint resolves to a different
    major than the legacy lock file. Fix the declaration, never upgrade to clear
    a diff.
-2. **A wrong environment global**: the `env` tag value differs, which looks
-   like a tag change but is a configuration error.
+2. **A wrong global**: the profile or region resolved from the new path is not
+   the one the legacy stack used, so the plan fails to authenticate or wants to
+   recreate everything somewhere else.
 3. **A renamed provider alias**: aliases must keep their exact old names or
    every aliased resource plans as new.
 4. **Module source depth**: off by one `../`, or a git-ref source that now
@@ -164,14 +158,13 @@ the rules it may not negotiate:
 - **Never apply locally.** The agent runs `terramate generate`,
   `terraform fmt` and read-only `aws s3api` calls. Nothing else.
 - **Match provider versions exactly.** Never upgrade a major to clear a diff.
-- **A tags-only plan is the gate.** Anything else stops the run.
+- **An empty plan is the gate.** Anything else stops the run.
 - **Confirm before opening a pull request, and before every apply.**
 
-Those read like prompt hygiene, and they are: each one closes off a shortcut
-that would otherwise look locally reasonable to an agent halfway through a
-migration. The interesting one is the last. The agent prepares and waits rather
-than finishing, because the steps it cannot take are the steps that change
-infrastructure.
+Each rule closes off a shortcut that would look locally reasonable to an agent
+halfway through a migration. The last one matters most: the agent prepares and
+waits rather than finishing, because the steps it cannot take are the steps
+that change infrastructure.
 
 The tool doing that planning is [Atlantis](https://www.runatlantis.io/): it
 plans when a pull request opens and applies when someone comments on it. Two
@@ -185,7 +178,8 @@ whether the author is a person or not.
 Applying is one comment per stack directory, in sequence:
 
 ```bash
-gh pr comment "$PR" --body "atlantis apply -d stacks/aws/<account>/<region>/<stack>"
+gh pr comment "$PR" \
+  --body "atlantis apply -d stacks/aws/<account>/<region>/<stack>"
 gh pr checks "$PR" --watch
 ```
 
@@ -214,10 +208,11 @@ knowing before three agents report the same failure at once.
 
 ## Limitations
 
-The tags-only gate is specific to AWS `default_tags`. On a provider with no
-equivalent mechanism a byte-perfect state copy produces an empty plan, which is
-a weaker signal: an empty plan is also what a stack pointed at the wrong
-resources produces when it manages nothing yet.
+An empty plan proves that the copied state, the moved code and what is deployed
+agree with each other. It does not prove the legacy directory has stopped being
+applied: an apply there after the copy changes infrastructure that the new
+stack will then want to revert. Freeze the legacy directory once its object is
+copied, and delete it in the migration pull request.
 
 The state copy needs credentials for the destination account, which is the one
 step in the procedure that cannot be delegated to continuous integration.

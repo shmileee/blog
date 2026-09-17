@@ -10,10 +10,9 @@ categories:
 A repository layout for a Terraform monorepo managed with
 [**Terramate**](https://terramate.io/docs/cli/), where a stack’s position in the
 tree supplies its account, its region and its environment. It covers the three
-directories that carry code, what a single stack directory holds, how change
-detection reads the layout, and the conventions that keep a tree of several
-hundred stacks workable. This is the first post in a series on Terraform and
-Terramate.
+directories that carry code, how the path stands in for configuration, what a
+single stack directory holds, and how change detection reads the layout. This
+is the first post in a series on Terraform and Terramate.
 
 With this layout, adding a stack is one command and no copied files. The
 backend block, the provider blocks and the shared globals arrive from imports,
@@ -33,13 +32,12 @@ with the same files copied into each: `development/`, `staging/` and
 It is fine at three environments and one account.
 
 At tens of accounts three things go wrong. Every shared change becomes an
-N-file edit, so the AWS provider version, the default tags and the backend
-settings drift apart silently. The interesting difference between two
-environments, usually a handful of variables, is buried in a diff of otherwise
-identical files. And the facts that decide where a stack applies are literal
-strings in every copy: the account identifier, the AWS profile, the state
-bucket. Those
-are exactly the values a copy-paste gets wrong in the direction of production.
+N-file edit, so the AWS provider version and the backend settings drift apart
+silently. The interesting difference between two environments, usually a
+handful of variables, is buried in a diff of otherwise identical files. And the
+facts that decide where a stack applies are literal strings in every copy: the
+account identifier, the AWS profile, the state bucket. Those are exactly the
+values a copy-paste gets wrong in the direction of production.
 
 A fourth problem is orchestration. Running `terraform plan` across a few
 hundred root modules is not free, so continuous integration needs to know
@@ -63,12 +61,6 @@ for each is short:
 | `stacks/` | every root module Terramate manages | one stack is one directory containing `stack.tm.hcl` |
 | `modules/` | reusable modules the stacks call | referenced by relative path from inside the repository |
 | `stacks/imports/` | shared `*.tm.hcl` fragments | the only place a `generate_hcl` block lives |
-
-Auxiliary directories sit beside them: `templates/` for scaffolding, `scripts/`
-for repository automation, `docs/` for the rendered documentation. A repository
-that predates Terramate usually also carries a frozen legacy tree, which is
-simpler to leave in place and migrate stack by stack than to convert in one
-commit.
 
 Keeping `modules/` in the same repository is what makes change detection
 transitive. Terramate parses the `module` blocks in a stack’s `*.tf` files and
@@ -103,15 +95,17 @@ stacks/
 ├── aws/
 │   ├── aws.tm.hcl                    imports the generators
 │   └── acme-development/
-│       ├── account.tm.hcl            account id, AWS profile, environment
-│       └── eu-west-1/
-│           ├── region.tm.hcl         region name
-│           └── acm/                  a stack
-└── saas/                             stacks with no AWS account of their own
+│       ├── account.tm.hcl            account id, profile, environment
+│       ├── eu-west-1/
+│       │   ├── region.tm.hcl         region name
+│       │   └── acm/                  a stack
+│       └── us-east-1/
+│           └── region.tm.hcl
+└── saas/                             stacks without an AWS account
 ```
 
-The two intermediate files are the whole mechanism. An account directory states
-what is true of every stack in that account:
+The two files in between carry everything a stack inherits. An account
+directory states what is true of every stack in that account:
 
 ```hcl title="stacks/aws/acme-development/account.tm.hcl"
 globals {
@@ -134,25 +128,30 @@ import {
 }
 ```
 
-A stack three levels down declares none of this, which makes moving one a
-`git mv` followed by a regeneration:
+A stack three levels down declares none of this, so relocating one to another
+region is a `git mv` followed by a regeneration:
 
 ```bash
 git mv stacks/aws/acme-development/eu-west-1/acm-v2 \
-       stacks/aws/acme-production/eu-west-1/acm-v2
+       stacks/aws/acme-development/us-east-1/acm-v2
 terramate generate
 # [~] 000_terramate_generated_terraform.tf
 # [~] 001_terramate_generated_providers.tf
 
-grep -E 'bucket|key ' stacks/aws/acme-production/eu-west-1/acm-v2/000*.tf
-#     bucket         = "tf-state-euw1-222222222222"
+cd stacks/aws/acme-development/us-east-1/acm-v2
+grep -E 'bucket|key |region' 000_terramate_generated_terraform.tf
+#     bucket         = "tf-state-use1-111111111111"
 #     key            = "terraform/stacks/by-id/<stack-id>/terraform.tfstate"
+#     region         = "us-east-1"
 ```
 
-The bucket, the AWS profile and the environment tag all follow the new path.
-The state key does not, because it is derived from the stack’s
-Terramate-assigned identifier rather than its location, so moving a stack
-between accounts rewrites its wiring without migrating its state.
+The provider region and the state bucket follow the new path, and nothing in
+the stack directory was edited. The state key does not follow, because it is
+derived from the stack’s Terramate-assigned identifier rather than its
+location, so the state object moves to the new bucket under the same key; that
+copy is the procedure
+[the migration post](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/)
+covers.
 
 ## Stack anatomy
 
@@ -198,58 +197,15 @@ The numeric prefixes keep that listing stable and say where each file came from:
 `000` for the backend, `001` to `099` for shared imports, `100` and up for
 per-stack generators. Nothing in these files is edited by hand. They are
 regenerated from the `*.tm.hcl` sources and committed, which keeps
-`terraform plan` working from a plain checkout.
+`terraform plan` working from a plain checkout, and continuous integration runs
+`terramate generate --detailed-exit-code` to fail a branch whose committed
+output is stale.
 
-The ratio that results is the argument for the whole layout. Counting the
+The resulting ratio is the argument for the layout. Counting the
 repository this comes from: 15 files in `stacks/imports`, **2,040 lines** of
 generator, produce **1,954 files and 63,618 lines** of Terraform across 508
 stacks. None of it is reviewed line by line, because none of it was written by
 anyone.
-
-## Keeping the tree honest
-
-Committed generated code is only trustworthy if generation is enforced.
-`terramate generate` runs in pre-commit, filtered to `^stacks/.*/.*\.tm\.hcl$`,
-and again in continuous integration with `--detailed-exit-code`, which returns 0
-when nothing changed, 2 when it wrote something, and 1 on error:
-
-```bash
-terramate generate --detailed-exit-code
-# Nothing to do, generated code is up to date
-# after a hand edit: [~] 001_terramate_generated_providers.tf, exit code 2
-```
-
-There, exit code 2 is the failure condition: the generated code on the branch
-does not match its declarations. Formatters and hooks skip the output entirely,
-which is what the marker in the filename is for:
-
-```yaml title=".pre-commit-config.yaml"
-exclude: >
-  (?x)^(
-    .*/.*terramate_generated_.*\.tf$|
-    \.terraform/.*
-  )$
-```
-
-Scaffolding needs one more guard. A `cookiecutter` template for a stack contains
-a `stack.tm.hcl` with placeholders in it, and Terramate walks the whole tree, so
-every command that reads stacks fails on it, `generate` included:
-
-```text
-terramate list
-# Error: listing changed stacks error: searching for stacks:
-#   validating stack fields: "stack.id" "{{cookiecutter.stack_id}}"
-#   doesn't match "^[a-zA-Z0-9_-]{1,64}$"
-```
-
-An empty `.tmskip` file in `templates/` takes the directory out of the walk and
-the command works again.
-
-Tool versions belong under the same discipline, since the output of
-`terramate generate` depends on the binary that produced it. Pin Terramate and
-Terraform in the repository with [mise](https://mise.jdx.dev/) or an equivalent,
-rather than leaving them to whatever each engineer installed; the setup is in
-[Mise: faster, smarter tool versioning](/blog/posts/mise-faster-smarter-tool-versioning/).
 
 ## Limitations
 

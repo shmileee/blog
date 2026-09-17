@@ -19,8 +19,8 @@ these generators live in and
 secrets through.
 
 With this in place a stack declares which providers it needs and nothing else.
-The version constraint, the `provider` block, the AWS default tags and the
-credential plumbing are all derived from that declaration.
+The version constraint, the `provider` block and the credential plumbing are
+all derived from that declaration.
 
 The layout assumed throughout is `stacks/aws/<account-alias>/<region>/<stack>`,
 with Terramate globals declared at each level and inherited downward. Everything
@@ -37,11 +37,8 @@ the stack reaches into. None of it describes infrastructure. All of it is
 load-bearing, and it is copy-pasted.
 
 The cost shows up on every change that crosses stacks. Moving the AWS provider
-from `~> 5.0` to `~> 6.0` is one edit per root module. Adding a key to the
-mandatory tagging policy is another. A stack whose `default_tags` block was
-copied before the policy changed keeps provisioning untagged resources, and
-nothing in `terraform plan` points at it: the omission stays invisible until
-somebody audits the account.
+from `~> 5.0` to `~> 6.0` is one edit per root module, and a stack that was
+copied before the change keeps the old constraint until somebody notices.
 
 The obvious fixes do not hold. Provider configuration belongs to the root
 module: a reusable module may declare `required_providers`, but a module that
@@ -63,14 +60,11 @@ and something else renders the HCL. That is what Terramate’s
 
 [Part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) covers
 how [globals](https://terramate.io/docs/cli/code-generation/variables/globals)
-inherit down a directory tree. What matters here is the other half of the
-feature: a
+inherit down a directory tree. The other half of the feature is that a
 [labelled](https://terramate.io/docs/cli/code-generation/variables/globals#labeled-globals)
 `globals` block contributes one key to a map, so the providers a stack sees are
-assembled from every level above it. A block labelled
-`"terraform" "providers" "aws"` therefore populates
-`global.terraform.providers.aws`, and where the file sits decides which stacks
-see it:
+assembled from every level above it, and where a file sits decides which stacks
+see its entry:
 
 ```text
 stacks/
@@ -94,7 +88,10 @@ globals "terraform" "providers" "aws" {
   version = "~> 5.0"
   config = {
     region  = global.region_name
-    profile = tm_try(global.aws_config_profile, terramate.stack.path.basename)
+    profile = tm_try(
+      global.aws_config_profile,
+      terramate.stack.path.basename,
+    )
   }
 }
 ```
@@ -119,14 +116,18 @@ the tree can be switched off for one subtree without deleting the declaration.
 ## Generating the provider blocks
 
 The generator is a single `generate_hcl` block in `stacks/imports`, imported by
-the root of each subtree, as described in part one. Its
+the root of each subtree. Terraform allows
+[one version constraint per provider](https://developer.hashicorp.com/terraform/language/providers/requirements)
+across the whole configuration, so an alias must produce a `provider` block and
+no `required_providers` entry. Keeping the alias in the key,
+`aws.shared-services`, is what lets the
 [`lets`](https://terramate.io/docs/cli/code-generation/variables/lets) section
-turns the provider map into the shapes the output needs. The version constraints
-come from a comprehension that skips aliases:
+tell the two apart:
 
 ```hcl
 lets {
-  required_providers = { for k, v in tm_try(global.terraform.providers, {}) :
+  required_providers = {
+    for k, v in tm_try(global.terraform.providers, {}) :
     k => {
       source  = v.source
       version = v.version
@@ -136,50 +137,40 @@ lets {
       tm_length(tm_split(".", k)) == 1,
     ])
   }
-  # ... providers and providers_aliases differ only in that filter: == 1 and == 2 ...
+  # ... providers: the same filter; providers_aliases: == 2 instead ...
 }
 ```
 
-Splitting the key on `.` is the whole trick. Terraform requires the entire
-configuration to agree on
-[one version per provider](https://developer.hashicorp.com/terraform/language/providers/requirements),
-so `aws.shared-services` must contribute a `provider` block but must not
-contribute a version constraint. A single-segment key is a provider, a
-two-segment key is an alias of one, and each comprehension takes the segment
-count it wants.
-
-The `content` block renders both maps. The version map goes out as a single
-line, `tm_dynamic "required_providers" { attributes = let.required_providers }`,
-nested in a `terraform` block. The providers themselves are a `tm_dynamic` over
-the other map: one `provider` block per entry, with a nested `default_tags`
-block only where the provider is `aws`. Their attributes are the stack’s own
-`config`, merged with the credential references covered in the next section.
+The `content` block renders the maps with
+[`tm_dynamic`](https://terramate.io/docs/cli/code-generation/generate-hcl#the-tm-dynamic-block):
+a `required_providers` block from the first, one `provider` block per entry of
+the second, each carrying its own `config` merged with the credential references
+covered in the next section:
 
 ```hcl
 content {
+  terraform {
+    tm_dynamic "required_providers" {
+      attributes = let.required_providers
+    }
+  }
+
   tm_dynamic "provider" {
     for_each = let.providers
     labels   = [provider.key]
     attributes = tm_merge(
       provider.value.config,
-      { for k, v in provider.value.config_partial : k => tm_hcl_expression(v) },
+      {
+        for k, v in provider.value.config_partial :
+        k => tm_hcl_expression(v)
+      },
     )
-
-    content {
-      tm_dynamic "default_tags" {
-        condition = provider.key == "aws"
-        content {
-          tags = let.aws_default_tags
-        }
-      }
-    }
   }
 }
 ```
 
-The aliased providers are a second `tm_dynamic` over `providers_aliases`, where
-the label is the first segment of the key and the `alias` attribute is the
-second:
+Aliases come from the third map, with the label and the `alias` attribute taken
+from the two halves of the key:
 
 ```hcl
 tm_dynamic "provider" {
@@ -189,7 +180,6 @@ tm_dynamic "provider" {
 
   content {
     alias = tm_split(".", provider.key)[1]
-    # ... the same conditional default_tags block ...
   }
 }
 ```
@@ -211,39 +201,23 @@ terraform {
 provider "aws" {
   profile = "acme-development"
   region  = "eu-west-1"
-  default_tags {
-    tags = {
-      Application = "acm"
-      StackId     = "5a850d00-c6b5-4f7d-9d85-bc9f77816c01"
-      env         = "development"
-      terraform   = "true"
-    }
-  }
 }
 provider "aws" {
   profile = "acme-shared-services"
   region  = "eu-west-1"
   alias   = "shared-services"
-  # ... identical default_tags block ...
 }
 ```
-
-The tags are assembled in the generator with `tm_merge`, framework keys last, so
-a stack can extend the set through its own global but cannot override `StackId`
-or `env` by reusing the key. `tm_dynamic` is documented under
-[generate_hcl](https://terramate.io/docs/cli/code-generation/generate-hcl#the-tm-dynamic-block).
 
 ## Wiring credentials into providers
 
 Most SaaS providers need a token, and the token comes from the
 [lookup module](/blog/posts/one-terraform-module-for-provider-credentials/) that
-part two covers. Referencing its output from a generator takes one extra step: a
-generated attribute is rendered as a value, so writing
-`module.providers_credentials.secrets.github.app_id` into one produces a quoted
-string where Terraform needs an unquoted reference. The generator keeps those
-references as strings in a `config_partial` map and converts them with
+part two covers. A generated attribute is rendered as a value, so a reference
+to that module’s output would land in the output file as a quoted string. The
+generator keeps such references as strings and converts them with
 [`tm_hcl_expression`](https://terramate.io/docs/cli/code-generation/functions/tm_hcl_expression),
-which turns a string into verbatim HCL:
+which emits a string as verbatim HCL:
 
 ```hcl
 default_config_partials = {
@@ -256,18 +230,16 @@ default_config_partials = {
     github = {
       id              = "module.${let.credentials_module}.secrets.github.app_id"
       installation_id = "module.${let.credentials_module}.secrets.github.app_installation_id"
-      pem_file        = "base64decode(module.${let.credentials_module}.secrets.github.private_key_b64_encoded)"
+      pem_file        = "base64decode(module.${let.credentials_module}.secrets.github.private_key_b64)"
     }
   }
 }
 ```
 
-The `static` entries become plain attributes; the `dynamic` ones become nested
-blocks, here GitHub’s `app_auth`. Both reference the same module output, one map
-of secret data keyed by provider name. The generator instantiates that module
-only when a stack enables a provider that needs credentials, computed as a
-`tm_setintersection` of the providers that have a partial and the providers that
-are enabled. For a stack enabling `github` and `pagerduty`:
+`static` entries become attributes and `dynamic` ones nested blocks, here
+GitHub’s `app_auth`. The module is instantiated only in a stack that enables a
+provider with a partial, with exactly those names requested. For a stack
+enabling `github` and `pagerduty`:
 
 ```hcl title="stacks/saas/github/001_terramate_generated_providers.tf"
 module "providers_credentials" {
@@ -282,7 +254,7 @@ provider "github" {
   app_auth {
     id              = module.providers_credentials.secrets.github.app_id
     installation_id = module.providers_credentials.secrets.github.app_installation_id
-    pem_file        = base64decode(module.providers_credentials.secrets.github.private_key_b64_encoded)
+    pem_file        = base64decode(module.providers_credentials.secrets.github.private_key_b64)
   }
 }
 provider "pagerduty" {
@@ -323,9 +295,9 @@ an output that does not exist. The error surfaces at `terraform init` or
 `terraform validate`, one step later than the mistake.
 
 Attributes come from the declaration, but blocks do not. A provider whose
-credentials or options live in a nested block, as GitHub’s `app_auth` and AWS’s
-`default_tags` do, needs its own `tm_dynamic` and condition in the generator.
-Adding such a provider is a generator edit, not just a global.
+credentials live in a nested block, as GitHub’s `app_auth` does, needs its own
+`tm_dynamic` and condition in the generator. Adding such a provider is a
+generator edit, not just a global.
 
 ## What’s next?
 

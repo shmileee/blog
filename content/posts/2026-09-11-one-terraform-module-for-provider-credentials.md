@@ -20,9 +20,10 @@ The result is that no stack in the repository contains a secret identifier. A
 stack names what it needs, and the module is the single place that knows where
 that lives and how to read it.
 
-The stacks it serves are root modules in a Terramate monorepo, laid out as
-`stacks/aws/<account>/<region>/<stack>`, but nothing in the module itself
-depends on that: it is ordinary Terraform, callable from anywhere.
+The module is ordinary Terraform, callable from any root module, and the post
+shows it in a plain stack first. The stacks it was written for live in the
+Terramate monorepo from part one, where the module call itself is generated;
+that is where the series takes it next.
 
 The module below was validated with Terraform 1.15.8, and the transcripts are
 from a scratch repository built for this post. Secret names are generic
@@ -30,18 +31,25 @@ placeholders.
 
 ## The credential sprawl problem
 
-The PagerDuty provider needs a token before it can do anything, which in
-practice means an
+The PagerDuty provider needs a token before it can do anything. In a stack that
+keeps it in AWS Secrets Manager, that is an
 [`aws_secretsmanager_secret_version`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/secretsmanager_secret_version)
-data source in the stack, and a `jsondecode` wherever the value is used:
+data source, a `jsondecode` and a key lookup, all in the root module next to
+the provider block they feed:
 
-```hcl
+```hcl title="app/oncall/production/providers.tf"
 data "aws_secretsmanager_secret_version" "pagerduty" {
   secret_id = "infrastructure/pagerduty"
 }
+
+provider "pagerduty" {
+  token = jsondecode(
+    data.aws_secretsmanager_secret_version.pagerduty.secret_string
+  )["api_token"]
+}
 ```
 
-Three lines, and every stack that touches PagerDuty has its own copy. The copies
+Every stack that touches PagerDuty has its own copy of this, and the copies
 stop being identical quickly. One reads a secret that has since been renamed and
 fails on the next plan. Another reads one that still exists and holds a
 credential that was superseded elsewhere. A third reads the right secret and
@@ -56,22 +64,27 @@ available to every stack, and it has to be one thing.
 
 ## A module that provisions nothing
 
-The module has no `resource` blocks. It holds a registry of identifiers, a
-filter, a data source, and one output, which makes it safe to instantiate
-anywhere: the worst it can do is read.
+The module has no `resource` blocks: a registry of identifiers, a filter, a
+data source and one output. HashiCorp’s module composition guide calls this a
+[data-only module](https://developer.hashicorp.com/terraform/language/modules/develop/composition#data-only-modules),
+a module that creates nothing and exists to encapsulate how something that
+already exists is looked up, so that callers depend on the name they ask for
+rather than on the lookup. The usual examples resolve a network or a machine
+image; here the thing resolved is a credential, and the module is safe to
+instantiate anywhere because the worst it can do is read.
 
 The interface is two variables. One names what to fetch, the other extends the
 registry with entries it cannot know in advance:
 
 ```hcl title="modules/providers-credentials/main.tf"
 variable "terraform_providers" {
-  description = "Logical names to read secrets for; empty reads every known name."
+  description = "Logical names to read; empty reads every known name."
   type        = list(string)
   default     = []
 }
 
 variable "custom_paths" {
-  description = "Extra name-to-path mappings, merged over the built-in registry."
+  description = "Name-to-path entries merged over the built-in registry."
   type        = map(string)
   default     = {}
 }
@@ -99,11 +112,10 @@ locals {
 }
 ```
 
-The merge order is the useful part: `custom_paths` wins over the registry for a
-name it also defines. That is how a per-instance secret gets a per-instance
-identifier. A stack managing one Postgres cluster passes
-`custom_paths = { postgresql = "infrastructure/postgres/cluster-a" }` and reads
-it under the same `postgresql` name as everything else.
+`custom_paths` wins over the registry for a name both define, which is how a
+per-instance secret keeps a shared name: a stack managing one Postgres cluster
+passes `custom_paths = { postgresql = "infrastructure/postgres/cluster-a" }` and
+reads it as `postgresql` like everything else.
 
 What remains is the read and the output. A third variable, `create`, defaults to
 `true` and exists so a caller can switch the reads off without removing the
@@ -118,30 +130,36 @@ data "aws_secretsmanager_secret_version" "providers" {
 
 output "secrets" {
   description = "Secret data keyed by logical name."
-  value       = { for k, v in data.aws_secretsmanager_secret_version.providers : k => jsondecode(v.secret_string) }
+  value       = {
+    for k, v in data.aws_secretsmanager_secret_version.providers :
+    k => jsondecode(v.secret_string)
+  }
 }
 ```
 
-A secret version is a single string, so the `jsondecode` is what turns each one
-into a map and gives the output its shape: one entry per requested name, each
-holding that secret’s keys. The module does not know what those keys are, so
-adding a field to a secret needs no change here, and a consumer reads
+Each secret is a JSON document, so the output is one map per requested name.
+The module never enumerates the keys inside, so adding a field to a secret
+needs no change here, and a consumer reads
 `module.providers_credentials.secrets.pagerduty.api_token` directly.
 
 ## Validating the request
 
 A name that is not in the registry is the one mistake worth catching early, and
 a [`validation`](https://developer.hashicorp.com/terraform/language/block/variable)
-block on the variable catches it. The condition reads `local.secret_paths`,
-which is a reference out of the variable and into the rest of the module:
+block on the variable catches it. The condition reads
+`local.merged_secret_paths`, which is a reference out of the variable and into
+the rest of the module:
 
 ```hcl
 validation {
   condition = alltrue([
     for name in var.terraform_providers :
-    contains(concat(keys(local.secret_paths), keys(var.custom_paths)), name)
+    contains(keys(local.merged_secret_paths), name)
   ])
-  error_message = "Unknown names requested. Known names: ${join(", ", keys(local.secret_paths))}."
+  error_message = format(
+    "Unknown names. Known: %s.",
+    join(", ", keys(local.secret_paths)),
+  )
 }
 ```
 
@@ -156,7 +174,7 @@ terraform plan
 #   on main.tf line 7, in module "providers_credentials":
 #    7:   terraform_providers = ["github", "datadog"]
 #
-# Unknown names requested. Known names: github, pagerduty, postgresql, slack.
+# Unknown names. Known: github, pagerduty, postgresql, slack.
 ```
 
 That message is the module’s documentation as far as most callers are
@@ -180,7 +198,10 @@ data "google_secret_manager_secret_version" "providers" {
 
 output "secrets" {
   description = "Secret data keyed by logical name."
-  value       = { for k, v in data.google_secret_manager_secret_version.providers : k => jsondecode(v.secret_data) }
+  value       = {
+    for k, v in data.google_secret_manager_secret_version.providers :
+    k => jsondecode(v.secret_data)
+  }
 }
 ```
 
@@ -192,25 +213,32 @@ particular encoding: a store that already returns structured data needs no
 
 ## Consuming it from a stack
 
-No stack writes the module block by hand. The
-[provider generator](/blog/posts/generating-terraform-providers-with-terramate/)
-computes the list of names a stack actually needs and emits the call, so a stack
-that enables the GitHub and PagerDuty providers gets:
+In a plain Terraform stack the module block replaces the data source, and the
+provider reads its token from the output:
 
-```hcl title="stacks/saas/github/001_terramate_generated_providers.tf"
+```hcl title="app/oncall/production/providers.tf"
 module "providers_credentials" {
-  source = "../../../modules/providers-credentials"
-  terraform_providers = [
-    "github",
-    "pagerduty",
-  ]
+  source              = "../../../modules/providers-credentials"
+  terraform_providers = ["pagerduty"]
+}
+
+provider "pagerduty" {
+  token = module.providers_credentials.secrets.pagerduty.api_token
 }
 ```
 
-Secrets frequently live in a different account from the resources a stack
-manages. Where they do, the generated block passes the reader explicitly:
+The stack no longer contains a secret identifier, and a renamed secret is a
+one-line change to the registry instead of a search through root modules. What
+it still contains is a module block and a provider block written by hand, and
+in a repository of a few hundred stacks those are the next thing to stop
+writing. With Terramate a stack declares which providers it enables, and a
+generator emits both blocks with the list of names computed from that
+declaration; that generator is the next post.
+
+Secrets often live in a different account from the resources a stack manages.
+Where they do, the caller passes the reader explicitly,
 `providers = { aws = aws.shared-services }`, naming an alias the stack already
-declares. The module itself assumes nothing about where it reads from.
+declares. The module assumes nothing about where it reads from.
 
 ## Limitations
 
@@ -235,9 +263,8 @@ it accordingly.
 
 ## What’s next?
 
-The list of names in that generated module block is not written by anyone: it is
-the intersection of the providers a stack enabled and the names this module
-knows about.
+The module block above is one more thing to write per stack, and the list of
+names in it follows from the providers the stack declares.
 [Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/)
-covers the generator that computes it, along with the provider blocks and
-version constraints it emits alongside.
+covers the generator that computes that list and emits the module call, the
+provider blocks and the version constraints together.

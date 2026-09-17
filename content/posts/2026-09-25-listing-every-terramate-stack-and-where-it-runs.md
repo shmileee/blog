@@ -103,11 +103,11 @@ for _, e := range entries {
 }
 ```
 
-`globals.ForStack` returns the fully evaluated globals for one stack, which is
-the whole point: a stack whose `environment` global says `production` while its
-path says otherwise reports `production`, because the evaluation is the same one
-code generation uses. Reading a single value out is a key-path lookup that
-returns a `cty` value, so a small `str` helper is worth writing once.
+`globals.ForStack` returns the fully evaluated globals for one stack, the same
+evaluation code generation uses, so a stack whose `environment` global says
+`production` while its path says otherwise reports `production`. Reading a
+single value out is a key-path lookup that returns a `cty` value, so a small
+`str` helper is worth writing once.
 
 Two practical notes. The library logs through `zerolog` at debug level, so
 `zerolog.SetGlobalLevel(zerolog.Disabled)` belongs at the top of `main`. And
@@ -122,7 +122,7 @@ STACK                                         ACCOUNT           REGION     ENV
 /stacks/aws/acme-development/eu-west-1/acm    acme-development  eu-west-1  development
 /stacks/aws/acme-production/eu-west-1/acm-v2  acme-production   eu-west-1  production
 /stacks/saas/github                           -                 -          operations
-/stacks/teams/team-data-ingest                acme-operations   eu-west-1  operations
+/stacks/teams/team-payments                   acme-operations   eu-west-1  operations
 /stacks/teams/team-platform                   acme-operations   eu-west-1  operations
 ```
 
@@ -166,8 +166,8 @@ terramate-stacks-explorer --view deployments --env production --format table
 learn what a repository contains before you know what to filter on, and
 `--format json` emits every field the loader resolved, including the account
 identifier, the AWS profile, the Terraform version constraint and the stack’s
-identifier. That is the part worth having: an inventory a script can consume,
-rather than a `find` command with conventions baked into it.
+identifier: an inventory a script can consume, rather than a `find` command
+with conventions baked into it.
 
 ### What it needs from the repository
 
@@ -199,9 +199,8 @@ reports `-` for region and falls back to the path segment for its account:
 # github            saas   saas              -          operations
 ```
 
-That degradation is the honest test of whether a convention is really a
-convention. The inventory is only as good as the globals, which is an argument
-for setting them at the account and region level, once, rather than per stack.
+The inventory is only as good as the globals, which is an argument for setting
+them at the account and region level, once, rather than per stack.
 
 ### The terminal user interface
 
@@ -212,7 +211,7 @@ and acting on a selection, where opening a subshell in the stack’s directory
 turns “where does this run” into “put me there”.
 [Bubble Tea](https://github.com/charmbracelet/bubbletea) is the obvious toolkit
 in Go, and keeping the inventory a plain list underneath keeps `--format json`
-honest for scripting.
+usable for scripting.
 
 Recorded against a mock repository of 22 deployments, it looks like this:
 
