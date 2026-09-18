@@ -1,143 +1,95 @@
 ---
-title: "Rewriting Docker image registries with Kyverno"
-description: Redirect container images through approved registries with a reusable Kyverno policy and a controlled rollout.
+title: Rewriting Docker image registries with Kyverno
+description: One Kyverno mutating policy sends every pod’s images through the ECR pull through cache without editing a manifest, rolled out one namespace at a time.
 date: 2024-12-23 12:28:00
 categories:
   - kubernetes
-  - aws
+  - kyverno
   - argocd
 ---
 
-As a continuation of [Setting up pull through cache repositories in AWS
-ECR](/blog/posts/setting-up-pull-through-cache-repositories-in-aws-ecr/),
-you might want to roll them out gradually to a live Kubernetes cluster without
-causing disruption or excessive effort. While you will eventually need to
-update your manifests to point to the correct ECR registry, scaling this across
-multiple clusters and namespaces is a complex task. Fortunately, tools like
-Kyverno can simplify this process.
+[The previous post](/blog/posts/setting-up-pull-through-cache-repositories-in-aws-ecr/)
+put a pull through cache in front of Docker Hub, Quay and the Kubernetes
+registry. Getting clusters to use it means every image reference in every
+manifest changing from `docker.io/library/nginx` to
+`<registry>/docker-hub/library/nginx`, across namespaces and clusters owned
+by teams with other things to do. A Kyverno policy does the rewrite at
+admission time instead, so pods pull through the cache now and the manifests
+catch up at whatever pace suits their owners.
 
----
+> [!NOTE] Versions and placeholders
+>
+> Kyverno `ClusterPolicy` syntax as of December 2024 (`foreach` with
+> `patchStrategicMerge`), tested in the
+> [Kyverno playground](https://playground.kyverno.io). `<registry>` stands
+> for `111111111111.dkr.ecr.eu-west-1.amazonaws.com`; the account id and
+> region are placeholders. The finished policy is
+> [open in the playground](https://tinyurl.com/kyverno-playground).
 
-## What is Kyverno?
+## What Kyverno does here
 
-[Kyverno](https://kyverno.io) is a Kubernetes-native policy engine that allows you to define rules
-(policies) to validate, mutate, or generate Kubernetes configurations. It helps
-ensure your clusters adhere to best practices and security standards
-automatically. In this scenario, Kyverno's mutating capabilities are
-particularly useful. By creating a policy, you can dynamically rewrite image
-registries to the desired ones (like those set up in the previous post) without
-modifying the actual manifests. This gives you valuable time to update
-manifests while already benefiting from ECR's features.
+[Kyverno](https://kyverno.io) is a policy engine that runs as an admission
+webhook: a `ClusterPolicy` with a `mutate` rule changes a resource between the
+API server receiving it and storing it. The rule here matches pod creation,
+looks at each container whose image comes from one of the upstream registries,
+and rewrites the image to the cache’s prefix for that registry. Kyverno’s own
+[example](https://kyverno.io/policies/other/replace-image-registry-with-harbor/replace-image-registry-with-harbor)
+replaces one static registry with another; the version below also handles
+what Docker Hub leaves implicit, which is most of the work.
 
-A few key highlights about Kyverno's functionality:
+## The policy
 
-- [Install](https://kyverno.io/docs/installation) Kyverno in your cluster.
-- Define policies using native YAML syntax by creating a `ClusterPolicy` object
-  and applying it.
-- From now on, Kyverno's controller intercepts incoming requests to the
-  cluster, modifying them before they are persisted.
+One rule, one registry:
 
-To illustrate, here’s a simple example of a `ClusterPolicy` that uses the
-mutate feature to add a label to all newly created pods:
-
-```yaml
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
-metadata:
-  name: add-default-label
-spec:
-  rules:
-    - name: add-label
-      match:
-        resources:
-          kinds:
-            - Pod
-      mutate:
-        patchesJson6902: |
-          - op: add
-            path: "/metadata/labels/environment"
-            value: "default"
-```
-
-The [Kyverno introduction](https://kyverno.io/docs/introduction) has more examples and explanation.
-
----
-
-## How Kyverno simplifies image registry rewrites
-
-In a similar way, you can create a policy to modify the image registry
-dynamically. Although the official Kyverno documentation provides [_some
-examples_](https://kyverno.io/policies/other/replace-image-registry-with-harbor/replace-image-registry-with-harbor)
-of such policies, they are often overly simplistic (e.g., rewriting static
-registry `A` to static registry `B`). With slightly more complex but flexible
-methods, you can achieve dynamic behavior suited to a wider range of scenarios.
-
-Let’s break this process into a step-by-step tutorial for building a scalable
-`ClusterPolicy`.
-
-## Step 1: define the bare bones
-
-Let’s start with a simple use case: redirecting all images pulled from the
-public Docker Hub registry to a configured pull through cache repository in ECR,
-specifically for Docker Hub.
-
-```yaml
+```yaml title="patch-docker-io.yaml"
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
   name: patch-docker-io-image-registry
-  annotations:
-    policies.kyverno.io/title: "Patch Image Registry 'docker.io'"
 spec:
-  # Only apply this policy to newly created resources.
+  # admission only: pods that already exist are left alone
   background: false
   rules:
     - name: patch-image-registry-pod
       match:
         resources:
-          kinds:
-            - Pod
+          kinds: [Pod]
       mutate:
         foreach:
-          # Iterate over every container defined in a Pod. Defaults to an empty list
-          # if `.spec.containers` is absent, such as when only `initContainers` or
-          # `ephemeralContainers` are defined.
+          # `|| []`: a pod with only initContainers has no .spec.containers
           - list: "request.object.spec.containers || []"
             preconditions:
               all:
-                # Check if the image registry is `docker.io`. Kyverno normalizes images
-                # without explicitly set registries, so `python:3.12` defaults to `docker.io`.
-                - key: '{{ images.containers."{{ element.name }}".registry }}'
+                # kyverno parses the image, so `python:3.12` is docker.io
+                - key: '{{ images.containers."{{element.name}}".registry }}'
                   operator: Equals
                   value: docker.io
             context:
-              # A helper variable for the full ECR registry URL.
-              - name: ecrRegistryFullname
+              - name: registry
                 variable:
-                  # Replace the account ID and region to match your setup.
                   value: "111111111111.dkr.ecr.eu-west-1.amazonaws.com"
-              # Regular expression to match `docker.io` images. Note: a capture group `(.*)` is required.
-              - name: upstreamUrlRegexp
-                variable:
-                  value: "^docker\\.io/(.*)$"
-              # Prefix for the ECR namespace configured as a pull through cache. See the previous blog post for details.
-              - name: ecrPrefixName
+              - name: prefix
                 variable:
                   value: "docker-hub"
-              # Prepend `library/` if no repository is specified (e.g., `python:3.12`).
-              - name: withDefaultRepository
+              # the capture group is what lands after the prefix
+              - name: upstream
                 variable:
-                  value: "{{ regex_replace_all('^([^/]+)$', '{{ element.image }}', 'library/$1') }}"
-              # Normalize:
-              # - Add `docker.io` as the default registry if unspecified.
-              # - Add `:latest` as the default tag if unspecified.
-              - name: imageNormalized
+                  value: "^docker\\.io/(.*)$"
+              # `python:3.12` means `library/python:3.12` on docker hub
+              - name: withLibrary
                 variable:
-                  value: "{{ image_normalize(withDefaultRepository) }}"
-              # Replace the upstream URL pattern with the ECR registry prefix.
+                  value: >-
+                    {{ regex_replace_all('^([^/]+)$',
+                    '{{ element.image }}', 'library/$1') }}
+              # adds the registry and `:latest` where they were omitted
+              - name: normalized
+                variable:
+                  value: "{{ image_normalize(withLibrary) }}"
               - name: finalImage
                 variable:
-                  value: "{{ regex_replace_all('{{ upstreamUrlRegexp }}', imageNormalized, '{{ ecrRegistryFullname }}/{{ ecrPrefixName }}/$1') }}"
+                  value: >-
+                    {{ regex_replace_all('{{ upstream }}', normalized,
+                    '{{ registry }}/{{ prefix }}/$1') }}
             patchStrategicMerge:
               spec:
                 containers:
@@ -145,114 +97,78 @@ spec:
                     image: "{{ finalImage }}"
 ```
 
-This example is self-explanatory, with every step commented. Notably, Kyverno
-simplifies certain tasks, such as exposing information about the default
-registry (`docker.io`) when none is specified. Handling images from Docker Hub
-can be tricky, as images without a specified repository (e.g., `python:3.12`)
-default to the `library` prefix when pulled. While it’s a good habit to
-explicitly include the `library` prefix manifests, Kyverno’s mutating
-capabilities allow you to handle these cases dynamically.
+Two things the rule has to know that a manifest does not say. An image with
+no slash in it, `python:3.12`, lives under Docker Hub’s `library/` namespace,
+and the cache’s repository path has to say so, hence `withLibrary`. And an
+image with no registry or no tag is `docker.io/…:latest`;
+[`image_normalize`](https://kyverno.io/docs/writing-policies/jmespath/#image_normalize)
+writes both out, so the rewritten reference is fully qualified and the
+repository ECR creates has an unambiguous name.
 
-Additionally, Kyverno’s built-in
-[`image_normalize()`](https://kyverno.io/docs/writing-policies/jmespath/#image_normalize)
-function ensures consistency by appending the default registry and tag when
-missing. While not strictly required, this practice improves clarity by
-explicitly defining the image source and tag, which is helpful for debugging
-and maintenance.
+## Testing it in the playground
 
-## Step 2: test your policy in the Kyverno Playground
+The [playground](https://playground.kyverno.io) takes the policy on the left
+and a resource on the right and shows the mutated result. A pod with five
+containers covers the cases:
 
-Before applying the policy to your cluster, use the [Kyverno
-playground](https://playground.kyverno.io) to test it against a sample manifest
-and visualize the mutation results.
-
-1. Add your policy to the left pane of the playground interface.
-2. Add the following manifest to the right pane:
-
-   ```yaml
-   apiVersion: v1
-   kind: Pod
-   metadata:
-     name: multi-registry-example
-     namespace: default
-   spec:
-     containers:
-       - image: nginx
-         name: nginx
-
-       - image: library/nginx
-         name: library-nginx
-
-       - image: docker.io/library/nginx
-         name: docker-io-library-nginx
-
-       - image: docker.io/example-custom/example-custom
-         name: example-custom-example-custom
-
-       - image: public.ecr.aws/ubuntu/ubuntu:edge
-         name: public-ecr-aws-ubuntu-ubuntu-edge
-   ```
-
-3. Click **Start** in the bottom-right corner. A popup will indicate whether
-   the policy was successfully applied. If successful, the status will show as
-   `pass`, and you'll see a "details" hyperlink.
-
-4. Click the **Details** hyperlink to open a diff view, showing the manifest
-   before and after the policy was applied. In this case, only images
-   originating from Docker Hub will show updates to their
-   `.spec.containers[].image` fields.
-
-If you encounter any issues, get stuck, or simply want to explore a
-pre-configured example, open [the finished policy in the Kyverno
-Playground](https://tinyurl.com/kyverno-playground).
-
-## Step 3: take other containers into consideration
-
-Per the [Kubernetes Pod
-specification](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/),
-in addition to application containers, a Pod can also include `initContainers`
-that execute during startup and `ephemeralContainers` that can be injected for
-debugging purposes. To fully proxy your containers to another registry, such as
-ECR, you must account for these container types as well.
-
-To include `initContainers` and `ephemeralContainers` in your policy, simply
-duplicate the elements under the `foreach` list. Replace `containers` with
-either `initContainers` or `ephemeralContainers` in the copied sections, and
-you're all set.
-
-If you want to test this updated policy in the playground, remember to
-include relevant test data. For example:
-
-```yaml
-... omitted for brevity ...
+```yaml title="pod.yaml"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-registry-example
 spec:
-  initContainers:
-    - name: init-public-latest-tag
-      image: docker.io/library/busybox:latest
-
-    - name: init-public-ecr-versioned
-      image: public.ecr.aws/ubuntu/ubuntu:20.04
+  containers:
+    - name: nginx
+      image: nginx
+    - name: library-nginx
+      image: library/nginx
+    - name: docker-io-library-nginx
+      image: docker.io/library/nginx
+    - name: acme-api
+      image: docker.io/acme/api:1.4
+    - name: ubuntu
+      image: public.ecr.aws/ubuntu/ubuntu:edge
 ```
 
-## Step 4: don't repeat yourself
+The four Docker Hub images come out fully qualified under the cache; the ECR
+Public one is not this rule’s business:
 
-Duplicating the same logic for `containers`, `initContainers`, and
-`ephemeralContainers` quickly becomes tedious and error-prone. Now, imagine
-scaling this policy to support additional registries like `quay.io` or
-`ghcr.io`. While I initially aimed to make the policy as generic as possible to
-handle multiple registries within a single rule, I ran into a maze of caveats
-and unexpected behavior from Kyverno, where rules started conflicting with each
-other.
+| Image in the manifest | After the policy |
+| --- | --- |
+| `nginx` | `<registry>/docker-hub/library/nginx:latest` |
+| `library/nginx` | `<registry>/docker-hub/library/nginx:latest` |
+| `docker.io/library/nginx` | `<registry>/docker-hub/library/nginx:latest` |
+| `docker.io/acme/api:1.4` | `<registry>/docker-hub/acme/api:1.4` |
+| `public.ecr.aws/ubuntu/ubuntu:edge` | unchanged |
 
-To streamline the creation of consistent policies across multiple registries, a
-better approach is to use a Helm chart. A Helm chart can dynamically generate
-`ClusterPolicy` resources for each registry, reducing duplication and manual
-effort. I’ve published such a chart under
-[shmileee/helm-charts@main:charts/kyverno-patch-registries](https://github.com/shmileee/helm-charts/tree/main/charts/kyverno-patch-registries).
+## Init and ephemeral containers
 
-You can use it with a simple `values.yaml` file like this:
+A pod has three container lists, and a policy that patches `containers`
+leaves `initContainers` and `ephemeralContainers` pulling from upstream. Each
+list is a `foreach` entry of its own, with the same preconditions, context and
+patch aimed at its own field:
 
 ```yaml
+      mutate:
+        foreach:
+          - list: "request.object.spec.containers || []"
+            # ... preconditions, context and patch as above ...
+          - list: "request.object.spec.initContainers || []"
+            # ... the same, patching spec.initContainers ...
+          - list: "request.object.spec.ephemeralContainers || []"
+            # ... the same, patching spec.ephemeralContainers ...
+```
+
+## One chart, many registries
+
+Three lists times four registries is twelve copies of the same block, and my
+attempt at one rule that handled every registry ran into rules conflicting
+with each other. A Helm chart that renders one `ClusterPolicy` per registry
+keeps the policies simple and the duplication in a template:
+[shmileee/helm-charts, `kyverno-patch-registries`](https://github.com/shmileee/helm-charts/tree/main/charts/kyverno-patch-registries).
+Its values name the same four upstreams the cache was configured for:
+
+```yaml title="values.yaml"
 common:
   ecrRegistryFullname: "111111111111.dkr.ecr.eu-west-1.amazonaws.com"
 
@@ -263,9 +179,6 @@ registriesToOverwrite:
   public.ecr.aws:
     upstreamUrlRegexp: '^public\\.ecr\\.aws/(.*)$'
     ecrPrefixName: "public-ecr"
-  ghcr.io:
-    upstreamUrlRegexp: '^ghcr\\.io/(.*)$'
-    ecrPrefixName: "ghcr"
   quay.io:
     upstreamUrlRegexp: '^quay\\.io/(.*)$'
     ecrPrefixName: "quay"
@@ -274,62 +187,58 @@ registriesToOverwrite:
     ecrPrefixName: "registry-k8s-io"
 ```
 
-This approach allows you to easily scale and maintain policies for multiple
-registries while avoiding repetitive and error-prone configurations.
+## Rolling out by namespace
 
-## Step 5: gradually roll it out
+A wrong regular expression, or a cluster whose nodes cannot pull from ECR
+yet, stops every new pod in the cluster, so the policies apply only to
+namespaces that carry a label. The chart adds the selector to every rule’s
+`match`:
 
-Applying cluster-wide policies, like the one we’ve created, requires caution.
-If the regular expression is incorrect or the cluster lacks access to pull
-images from ECR, pods will fail to start. To ensure a smooth rollout, it’s a
-good practice to use a namespace selector to apply the policy only to specific
-namespaces that meet defined criteria.
-
-The Helm chart from the previous step includes a built-in namespace selector
-based on a label. Kyverno checks for this label on namespaces and applies the
-policy only if the label is present. By default, the label used is
-`pull-through-enabled: true`, but you can customize it by setting the
-`namespaceSelectorLabel` field in the `values.yaml`
-([reference](https://github.com/shmileee/helm-charts/blob/main/charts/kyverno-patch-registries/values.yaml)).
-
-When you’re ready to test the policy, label your target namespace:
-
-```bash
-kubectl label namespace <ns-name> pull-through-enabled=true --overwrite
+```yaml
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels:
+                  pull-through-enabled: "true"
 ```
 
-If you’re confident and want to apply the policy across all namespaces, use:
+Enabling one namespace, then all of them, is two commands:
 
 ```bash
+kubectl label namespace <namespace> pull-through-enabled=true --overwrite
 kubectl label namespaces --all pull-through-enabled=true --overwrite
 ```
 
-This method ensures a controlled rollout, allowing you to verify the policy’s
-behavior before extending it cluster-wide.
+## Drift in Argo CD
 
-## Step 6: conclusion — drift in GitOps
+A mutated pod no longer matches the manifest in Git, so Argo CD marks the
+`Application` as out of sync. Either update the manifests, which is the plan
+anyway and now has no deadline, or tell Argo CD to
+[ignore differences](https://argo-cd.readthedocs.io/en/stable/user-guide/diffing/#application-level-configuration)
+in `.spec.containers[].image` for the affected applications. The second
+option also hides an image change someone made by hand, so it is a bridge,
+not a destination. The `ApplicationSet` objects that generate those
+applications are the subject of two earlier posts,
+[part one](/blog/posts/demystifying-argocd-applicationsets-pt1/) and
+[part two](/blog/posts/demystifying-argocd-applicationsets-pt2/).
 
-If you're using GitOps with a tool like Argo CD, applying these policies to
-redirect container image registries will inevitably cause a drift. Argo CD will
-flag your `Application` objects as out of sync because the live state no longer
-matches the raw manifests in your Git repository.
+## Limitations
 
-To resolve this, you have two options:
+`background: false` means the policy touches new pods only. Running pods keep
+their upstream images until something recreates them, so a namespace is not
+on the cache until its deployments have rolled once.
 
-1. Update the manifests to reflect the new registry.
-2. Configure Argo CD to ignore changes to the `.spec.containers[].images` field.
-   Refer to [Argo CD – Diffing – Diffing Customization – Application Level
-   Configuration](https://argo-cd.readthedocs.io/en/stable/user-guide/diffing/#application-level-configuration)
-   for guidance.
+A mutating webhook on every pod puts Kyverno on the path of every pod start.
+With `failurePolicy: Fail` a Kyverno outage stops scheduling; with `Ignore`,
+pods created during the outage pull from upstream unrewritten, and nothing
+reports it.
 
-However, be cautious with the second approach, as ignoring updates to fields
-like images is generally discouraged.
+The regular expressions have to agree with the cache’s prefixes exactly. A
+mismatch breaks image pulls for every new pod in a labelled namespace, which
+is what the label is for, and the nodes still need the permissions from the
+previous post or the first pull of each image fails.
 
-> [!TIP] Learn more about ApplicationSet
->
-> If you're interested in learning more about `ApplicationSet` (a superset
-> controller designed for managing `Application` objects at scale), read my
-> previous posts:
->
-> - [Demystifying Argo CD’s ApplicationSet — part 1](/blog/posts/demystifying-argocd-applicationsets-pt1/)
-> - [Demystifying Argo CD’s ApplicationSet — part 2](/blog/posts/demystifying-argocd-applicationsets-pt2/)
+Kyverno has since added CEL-based policy kinds alongside `ClusterPolicy`. The
+syntax above still applies; a new policy written today would look different.

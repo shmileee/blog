@@ -1,66 +1,36 @@
 ---
-title: "Save yourself from formatting hell"
-description: Automate Markdown formatting and linting with pre-commit so reviews stay focused on meaningful changes.
-date: 2024-12-08 12:00:29 +0100
+title: Save yourself from formatting hell
+description: Two kinds of pre-commit hook, the ones that fix and the ones that only complain, and why the first commit after adding them fails on purpose.
+date: 2024-12-08 12:00:00
 categories:
   - pre-commit
   - developer-tools
 ---
 
-There's something quietly maddening about formatting: it's so trivial and yet
-so easy to forget. Markdown especially tends to accumulate trivial
-inconsistencies — extra spaces, trailing whitespace, messed-up headings. And
-when you share your docs with others, those tiny differences always show up in
-diffs and code reviews, consuming cognitive load that should be spent on more
-interesting work.
+Markdown accumulates small inconsistencies, trailing spaces, doubled blank
+lines, a heading with no blank line under it, and they surface in diffs and
+reviews where nobody wanted to talk about them. The
+[pre-commit framework](https://pre-commit.com/) runs formatters and linters
+on the staged files before every commit, so they never reach the diff. The
+setup is ten lines; the part worth a post is what happens on the first commit
+after adding it.
 
-So the question: how do we fix this? How do we ensure that docs (and other text
-files) remain consistently formatted without mentally checking and re-checking
-every time we commit?
+> [!NOTE] Versions
+>
+> `pre-commit-hooks` v4.6.0 and `markdownlint-cli` v0.42.0, as pinned below.
+> The transcripts are from a scratch repository with one Markdown file in it.
 
-**Enter `pre-commit` hooks.**
+## The configuration
 
-The [pre-commit framework](https://pre-commit.com/) is a system to manage and
-maintain a set of Git pre-commit hooks. It basically gives you a neat,
-centralized place to declare all the formatting and linting rules you want to
-run before every commit. Instead of remembering to manually run `markdownlint`
-or `prettier` (or any number of tools), `pre-commit` does it for you.
+One file at the repository root names the hooks and pins their versions:
 
-## Why bother?
-
-1. **Consistency:** You might think you’ll remember to run your formatters
-   every time, but you won’t. Humans are lazy, and that’s good. Offload the
-   task to a machine. Machines are perfect at being pedantic.
-
-2. **Reduce Noise in Diffs:** Random whitespace changes, inconsistent headers,
-   or different markdown link styles all create needless diff clutter. With
-   consistent auto-formatting, your diffs focus on meaningful changes, not nits.
-
-3. **Team Harmony:** If you work with others, you can preempt a lot of “Could
-   you fix the formatting?” comments by making the formatting fix itself before
-   any commit even gets made. It’s a subtle gift to your future self and your
-   colleagues.
-
-## Getting started
-
-If you haven’t tried it out, installing and using `pre-commit` is
-straightforward:
-
-```bash
-pip install pre-commit
-```
-
-Add a `.pre-commit-config.yaml` to your repository. For example, let’s say you
-want to auto-format your files by removing trailing whitespaces and also ensure
-that your docs are linted with a tool like `markdownlint`:
-
-```yaml
+```yaml title=".pre-commit-config.yaml"
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
+      - id: trailing-whitespace
       - id: end-of-file-fixer
-      - id: mixed-line-ending
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
     rev: v0.42.0
@@ -68,27 +38,125 @@ repos:
       - id: markdownlint
 ```
 
-Then just run:
+`pip install pre-commit` (or your package manager) installs the framework,
+and `pre-commit install` writes `.git/hooks/pre-commit` in the clone, which
+is what makes the hooks run on `git commit`.
 
-```bash
-pre-commit install
+## Two kinds of hook
+
+A hook is a program that receives the staged file names and exits non-zero
+to block the commit. The two hooks from `pre-commit-hooks` are *fixers*: they
+rewrite the file and exit non-zero, so the commit stops and the fix is
+already in the working tree. `markdownlint`, as configured above, is a
+*checker*: it reports and leaves the file alone. The difference shows on the
+first run. Take a file with three trailing spaces after “space”, two blank
+lines in a row, a heading with no blank line under it and no newline at the
+end:
+
+```markdown title="docs/README.md"
+# Notes
+
+Some text with trailing space
+
+
+## Heading without a blank line after
+Next line
 ```
 
-From now on, whenever you commit changes to your `.md` files, `pre-commit` will
-auto-format them and lint them. If something’s off, it’ll fix it or block the
-commit until you fix it.
+`pre-commit run --all-files` runs every hook on every file, which is how a
+newly added configuration is tried out:
 
-## Don’t overcomplicate it
+```text
+pre-commit run --all-files
+# trim trailing whitespace.......................................Failed
+# - hook id: trailing-whitespace
+# - exit code: 1
+# - files were modified by this hook
+#
+# Fixing docs/README.md
+#
+# fix end of files...............................................Failed
+# - hook id: end-of-file-fixer
+# - exit code: 1
+# - files were modified by this hook
+#
+# Fixing docs/README.md
+#
+# markdownlint...................................................Failed
+# - hook id: markdownlint
+# - exit code: 1
+#
+# docs/README.md:5 MD012/no-multiple-blanks Multiple consecutive blank lines [Expected: 1; Actual: 2]
+# docs/README.md:6 MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Below] [Context: "## Heading without a blank line after"]
+```
 
-One nice aspect of `pre-commit` is that you can start small. Add a simple
-formatter hook. Once you trust it, add a linter. Over time you might expand to
-check broken links, validate YAML frontmatter, or even run a spell checker. But
-keep your initial setup small and easy. The tool should relieve friction, not
-add to it.
+All three failed, for two different reasons. The fixers failed *because they
+changed the file*: `git status` now shows `AM docs/README.md`, the staged
+copy still carrying the whitespace and the working copy without it. Staging
+again and re-running is the whole remedy for a fixer. The checker failed
+because the file has two problems it will not touch, and re-running reports
+them again:
 
-## Conclusion
+```text
+git add docs/README.md
+pre-commit run --all-files
+# trim trailing whitespace.......................................Passed
+# fix end of files...............................................Passed
+# markdownlint...................................................Failed
+# - hook id: markdownlint
+# - exit code: 1
+#
+# docs/README.md:5 MD012/no-multiple-blanks Multiple consecutive blank lines [Expected: 1; Actual: 2]
+# docs/README.md:6 MD022/blanks-around-headings Headings should be surrounded by blank lines [Expected: 1; Actual: 0; Below] [Context: "## Heading without a blank line after"]
+```
 
-This might feel like a small optimization, but it’s really about mental load.
-You want to stop thinking about formatting rules and focus on content and
-logic. Let `pre-commit` handle the grunt work. After a few weeks, you’ll wonder
-how you ever lived without it.
+Both of those rules are ones markdownlint can fix, and one argument turns
+the checker into a fixer:
+
+```yaml title=".pre-commit-config.yaml"
+      - id: markdownlint
+        args: [--fix]
+```
+
+```text
+pre-commit run --all-files
+# trim trailing whitespace.......................................Passed
+# fix end of files...............................................Passed
+# markdownlint...................................................Failed
+# - hook id: markdownlint
+# - files were modified by this hook
+
+git add docs/README.md
+pre-commit run --all-files
+# trim trailing whitespace.......................................Passed
+# fix end of files...............................................Passed
+# markdownlint...................................................Passed
+```
+
+So the first commit after adding hooks fails on purpose, once per fixer that
+found something, and the second one goes through. Which hooks to make fixers
+is a choice: a formatter should fix, because nobody wants to hand-apply its
+opinion; a rule that needs a judgement call should report, so the author
+makes it.
+
+## Start with two hooks
+
+The configuration above is a good first set: it changes nothing anyone
+disagrees with. A linter with a hundred rules on day one produces a
+hundred-line report on the first commit and gets disabled by lunchtime. Add
+a rule when a review comment shows the need for it.
+
+## Limitations
+
+The hooks run only in a clone where `pre-commit install` has been run, and
+`git commit --no-verify` skips them. The same `pre-commit run --all-files`
+in continuous integration is what makes them a rule rather than a
+convention, and its environment setup wants `~/.cache/pre-commit` cached
+between runs.
+
+The `rev` pins go stale. `pre-commit autoupdate` moves them to the latest
+tags; Renovate can open the pull request.
+
+The first `--all-files` run on an existing repository rewrites every file the
+fixers disagree with. That is one large formatting commit, best made on its
+own before anyone else’s branch has to rebase over it.

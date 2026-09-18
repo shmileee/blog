@@ -1,44 +1,38 @@
 ---
-title: Demystifying Argo CD’s ApplicationSet — part 1
-description: Learn how list, cluster, and matrix generators turn a single ApplicationSet into repeatable multi-cluster deployments.
+title: "Argo CD ApplicationSet generators: list, cluster and matrix"
+description: One ApplicationSet produces many Applications; the three generators that supply its parameters, what each one yields, and the matrix trick that pins a revision per environment.
 date: 2024-12-11 10:30:00
 categories:
   - argocd
   - kubernetes
+  - gitops
 ---
 
-`ApplicationSet` is a custom resource (CR) that describes how to create a set
-of `Application` resources. This CR includes an `Application` template and an
-area to define the source of truth. `ApplicationSet` supports several sources
-of truth through a variety of
-[generators](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators).
+An `ApplicationSet` is one resource that produces many Argo CD `Application`s:
+a template for the application, plus a *generator* that supplies one set of
+parameters per application to produce. Ten services across four clusters is
+forty `Application` manifests written by hand, or one `ApplicationSet` whose
+generator yields forty parameter sets. This post is about the three
+generators that cover nearly everything I deploy, `list`, `cluster` and
+`matrix`, and what each one produces.
 
-## Generators
+> [!NOTE] Series and versions
+>
+> First of two posts on `ApplicationSet`; the second,
+> [Pointing an ApplicationSet at Helm and Kustomize: five options](/blog/posts/demystifying-argocd-applicationsets-pt2/),
+> is about the `source` field the parameters end up in. Argo CD 2.x as of
+> December 2024; cluster names, repositories and namespaces are placeholders.
 
-Generators are a cornerstone of `ApplicationSet`, enabling the dynamic creation
-of `Application` resources based on various inputs. A wide range of generators
-is available, each designed to serve specific use cases, with the Argo CD
-maintainers continuously expanding the list. Each generator comes with its own
-unique interface and supported options. Notably, the `matrix` generator allows
-you to combine the parameters produced by two separate generators, adding even
-greater flexibility.
+## The list generator
 
-We’ll cover the most straightforward yet widely used generators, suitable for
-addressing a broad range of common use cases.
+The parameters are written out by hand, one map per application, and every
+key becomes a variable in the template:
 
-### Generator: `list`
-
-Very simple -- generates parameters based on an arbitrary list of key/value
-pairs (as long as the values are string values). These key/value pairs can be
-referenced as variables in the `.spec.template`.
-
-**Example:**
-
-```yaml
+```yaml title="platform-tools.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: example
+  name: platform-tools
 spec:
   generators:
     - list:
@@ -49,112 +43,114 @@ spec:
             namespace: crossplane-system
   template:
     metadata:
-      name: "example"
+      name: "{{ appName }}"
     spec:
+      project: default
       source:
+        repoURL: git@github.com:org/repo.git
+        targetRevision: main
+        path: "charts/{{ appName }}"
         helm:
-          valueFiles:
-            - "{{ appName }}-values.yaml"
+          valueFiles: ["{{ appName }}-values.yaml"]
       destination:
+        server: https://kubernetes.default.svc
         namespace: "{{ namespace }}"
 ```
 
-### Generator: `cluster`
+The controller creates two `Application`s from it, and keeps them in step
+with the list: an element removed is an application deleted.
 
-Allows you to target Kubernetes clusters configured and managed by Argo CD.
-Since the clusters are configured through native Kubernetes secrets (object of
-`kind: Secrets`) with `argocd.argoproj.io/secret-type: cluster` annotation, the
-`ApplicationSet` controller will parse these secrets to generate parameters for
-each cluster.
+| Application | `source.path` | `helm.valueFiles` | `destination.namespace` |
+| --- | --- | --- | --- |
+| `atlantis` | `charts/atlantis` | `atlantis-values.yaml` | `automation` |
+| `crossplane` | `charts/crossplane` | `crossplane-values.yaml` | `crossplane-system` |
 
-This generator provides the following parameters:
+## The cluster generator
 
-- `name`: Cluster name in Argo CD — the name field of the secret.
-- `server`: Server URI — the server field of the secret.
-- `metadata.labels.*`: Key/value pairs for each label of secret.
-- `metadata.annotations.*`: Key/value pairs for each annotation of the secret.
+One parameter set per cluster Argo CD knows. Clusters are registered as
+secrets labelled `argocd.argoproj.io/secret-type: cluster`, and the generator
+reads them: `name` and `server` from the secret’s fields, plus every label and
+annotation as `metadata.labels.*` and `metadata.annotations.*`. A selector
+narrows the set; without one, every cluster is in. The cluster Argo CD itself
+runs in is named `in-cluster`.
 
-The `cluster` generator is a map that, by default, targets all Kubernetes
-clusters configured and managed by Argo CD, but it also allows you to target a
-specific cluster using a selector, such as label. The `in-cluster` label in the
-example below basically means "_the current cluster where Argo CD is running_".
+Here each cluster carries an `env` label, and the values file follows it:
 
-**Example:**
-
-```yaml
+```yaml title="metrics-server.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: example
+  name: metrics-server
 spec:
   generators:
-    - clusters:
-        selector:
-          matchLabels:
-            name: in-cluster
+    - clusters: {}
   template:
     metadata:
-      name: "example"
+      name: "metrics-server-{{ name }}"
     spec:
+      project: default
       source:
+        repoURL: git@github.com:org/repo.git
+        targetRevision: main
+        path: charts/metrics-server
         helm:
-          valueFiles:
-            - "{{ metadata.labels.env }}-values.yaml"
+          valueFiles: ["{{ metadata.labels.env }}-values.yaml"]
       destination:
         server: "{{ server }}"
+        namespace: kube-system
 ```
 
-### Generator: `matrix`
+With two registered clusters, `california` labelled `env: development` and
+`monaco` labelled `env: production`:
 
-Special type of generator that combines parameters from two other generators.
+| Application | `helm.valueFiles` | `destination.server` |
+| --- | --- | --- |
+| `metrics-server-california` | `development-values.yaml` | california’s API server |
+| `metrics-server-monaco` | `production-values.yaml` | monaco’s API server |
 
-For example, you might want to deploy a list of applications (`list` generator)
-across all your clusters (`cluster` generator).
+## The matrix generator
 
-**Example:**
+The Cartesian product of two generators: every parameter set of the first
+combined with every set of the second. A list of applications times the
+clusters is the common case:
 
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  name: example
+```yaml title="team-tools.yaml"
 spec:
   generators:
     - matrix:
         generators:
           - list:
               elements:
-                - appName: example1
-                - appName: example2
-          - clusters:
-              selector:
-                matchLabels:
-                  name: in-cluster
+                - appName: external-dns
+                - appName: cert-manager
+          - clusters: {}
   template:
     metadata:
-      name: "application-{{ appName }}"
+      name: "{{ appName }}-{{ name }}"
     spec:
+      project: default
       source:
-        path: "path-within-repo/kustomize/overlays/{{ appName }}"
+        repoURL: git@github.com:org/repo.git
+        targetRevision: main
+        path: "kustomize/overlays/{{ appName }}"
       destination:
         server: "{{ server }}"
+        namespace: "{{ appName }}"
 ```
 
-## Real-life examples
+Two applications times the same two clusters is four `Application`s:
+`external-dns-california`, `external-dns-monaco`, `cert-manager-california`
+and `cert-manager-monaco`.
 
-Once you’re familiar with these three commonly used generators, you can combine
-them to create various input permutations, enabling efficient management of
-multiple environments, applications, or clusters within a single file. Whether
-this approach suits your needs depends on your specific use case. I find it
-particularly effective in scenarios where a monorepo is well-organized with
-clear ownership, such as using `CODEOWNERS` to assign specific teams to
-maintain their respective `ApplicationSet`s. With a well-defined convention,
-such setup can also facilitate automated updates of these files using tools
-like [Renovate](https://mend.io/renovate).
+## A revision per environment
 
-The example configuration below demonstrates the true flexibility:
+The second generator in a matrix may use the first generator’s parameters,
+which turns the product into a join. Here the list carries an environment
+and the revision to deploy there, and the cluster selector reads the
+environment from the list, so each element lands only on its own clusters
+and staging can run a tagged release while development follows `main`:
 
-```yaml
+```yaml title="elasticsearch-exporter.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -165,52 +161,57 @@ spec:
         generators:
           - list:
               elements:
-                - clusterName: california
-                  clusterNamespace: blue
-                  revision: "main"
-                  environment: "development"
-                - clusterName: monaco
-                  clusterNamespace: green
-                  revision: "main"
-                  environment: "development"
-                - clusterName: california
-                  clusterNamespace: blue
-                  revision: "elasticsearch-exporter-v1.3.0"
-                  environment: "staging"
-                - clusterName: monaco
-                  clusterNamespace: green
-                  revision: "elasticsearch-exporter-v2.0.0"
-                  environment: "staging"
+                - environment: development
+                  revision: main
+                - environment: staging
+                  revision: elasticsearch-exporter-v1.3.0
           - clusters:
               selector:
-                matchExpressions:
-                  - key: environment
-                    operator: In
-                    values:
-                      - "{{ environment }}"
-                  - key: name
-                    operator: In
-                    values:
-                      - "in-cluster"
+                matchLabels:
+                  env: "{{ environment }}"
   template:
     metadata:
-      name: "elasticsearch-exporter-{{ clusterName }}"
+      name: "elasticsearch-exporter-{{ name }}"
     spec:
+      project: default
       source:
         repoURL: git@github.com:org/repo.git
         targetRevision: "{{ revision }}"
-        path: "clusters/elasticsearch-exporter/overlays/{{ clusterName }}"
+        path: "kustomize/elasticsearch-exporter/overlays/{{ name }}"
       destination:
         server: "{{ server }}"
-        namespace: "{{ clusterNamespace }}"
+        namespace: monitoring
 ```
 
----
+The `revision` values are the fields a tool such as
+[Renovate](https://mend.io/renovate) can bump in a pull request, and in a
+monorepo with `CODEOWNERS` routing each `ApplicationSet` to its team, that
+pull request goes to the people who own the deployment.
 
-## Conclusion
+## Limitations
 
-This post provides a concise overview of real-life use cases for the most
-common generators in Argo CD’s `ApplicationSet`. For a deeper dive into
-practical examples and detailed options on leveraging variables produced by
-these generators, particularly when configuring the `.source` field for
-manifests, read [part 2 of this series](/blog/posts/demystifying-argocd-applicationsets-pt2/).
+Every generated parameter is a string unless the `ApplicationSet` sets
+`goTemplate: true`; a list element with a number or a boolean in it has to
+quote it, and nested maps flatten to dotted keys.
+
+A generator that produces nothing produces a deletion. A cluster secret
+removed by mistake, or a list emptied by a bad merge, deletes every
+`Application` the set owned, and with the default sync policy their
+resources with them. `preserveResourcesOnDeletion` and a sync policy of
+`create-only` are the guard rails, and they are opt-in.
+
+Template names must be unique across everything the set generates. Two
+elements that render the same `metadata.name` yield one `Application` and an
+error in the controller’s log about the other.
+
+The cluster generator sees only clusters registered with Argo CD. A cluster
+added to the fleet but not to Argo CD is not a target, and no application
+tells you so.
+
+## What’s next?
+
+Everything above puts variables into `template.spec.source`, and that field
+is where the real choices are: a chart from a Helm repository, a chart in
+Git, a Kustomize overlay, or Kustomize inflating a chart.
+[Pointing an ApplicationSet at Helm and Kustomize: five options](/blog/posts/demystifying-argocd-applicationsets-pt2/)
+takes them one at a time.

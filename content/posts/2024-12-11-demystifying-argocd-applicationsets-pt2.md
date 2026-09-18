@@ -1,120 +1,102 @@
 ---
-title: Demystifying Argo CD’s ApplicationSet — part 2
-description: Compare five practical ways to combine ApplicationSet with Helm and Kustomize, including their tradeoffs.
+title: "Pointing an ApplicationSet at Helm and Kustomize: five options"
+description: The source field renders manifests four different ways; the constraint that picks each option, the fields it needs, and the setting Argo CD needs before Kustomize may inflate a chart.
 date: 2024-12-11 11:00:00
 categories:
   - argocd
   - kubernetes
+  - gitops
 ---
 
-In the [previous](/blog/posts/demystifying-argocd-applicationsets-pt1/) post, I covered the most
-common generators for `ApplicationSet`. These generators primarily produce
-variables used in the `.spec.template.spec.source` configuration, which defines
-how Argo CD retrieves and processes Kubernetes manifests.
+The generators from
+[the first post](/blog/posts/demystifying-argocd-applicationsets-pt1/)
+produce parameters; the template’s `spec.source` is where they are spent, and
+it is the field newcomers find ambiguous, because Argo CD renders manifests
+four different ways and each wants a different subset of it. Below are the
+five ways I point an `ApplicationSet` at Helm and Kustomize, each with the
+one constraint that decides for it.
 
-However, the `.source` field can be ambiguous for newcomers, so let’s break it
-down briefly -- below is a simplified decluttered summary of its supported
-directives and attributes. For the full list, refer to the [official
-`Application` specification
-reference](https://argo-cd.readthedocs.io/en/latest/user-guide/application-specification):
+> [!NOTE] Series and versions
+>
+> Second of two posts on `ApplicationSet`. Argo CD 2.x and kustomize 5 as of
+> December 2024; repositories, chart versions and paths are placeholders. The
+> [`Application` specification](https://argo-cd.readthedocs.io/en/latest/user-guide/application-specification)
+> lists every field.
 
-1. **Common**:
-   - **`repoURL`**: Points to a Git repository or a Helm chart repository.
-   - **`targetRevision`**: Specifies the Git branch, tag, or Helm chart version.
-   - **`path`**: Defines the directory within the repository (irrelevant for Helm repositories).
-2. **Helm**:
-   - **`chart`**: Specifies the chart name for Helm repositories.
-   - **`helm`**:
-     - `parameters`: Key-value overrides for chart values.
-     - `valueFiles`: YAML files for overriding chart values.
-     - `values`: Inline chart values (variables coming from generators can be used here).
-     - Miscellaneous options like `skipCrds`, `namespace`, etc.
-3. **Kustomize**:
-   - Options for transformers (`namePrefix`, `commonLabels`, etc.).
-   - `images`: Overrides container images.
-   - `components`: Includes external components.
-   - `patches`: Applies custom patches to resources.
-4. **Directory (Jsonnet)**:
-   - `recurse`: Recursively processes subdirectories.
-   - `jsonnet`: Configures Jsonnet-based processing with `extVars`, `tlas`, etc.
-   - `exclude` and **`include`**: Filters files by glob patterns.
+## What `source` needs, by kind
 
----
+| Field | Chart from a Helm repository | Chart in Git | Kustomize directory |
+| --- | --- | --- | --- |
+| `repoURL` | the chart repository | the Git repository | the Git repository |
+| `targetRevision` | the chart version | branch or tag | branch or tag |
+| `path` | — | directory holding `Chart.yaml` | directory holding `kustomization.yaml` |
+| `chart` | the chart name | — | — |
+| `helm.values` | inline values | inline values | — |
+| `helm.valueFiles` | — | files in the directory | — |
+| `kustomize.*` | — | — | images, patches, name prefixes |
 
-## Deployment options for Helm and Kustomize
+Generator variables can appear in any of these; `{{ metadata.labels.env }}`
+inside a `valueFiles` entry is how one set serves several environments.
 
-### Option 1: `helm` directive with a Helm repository
+## Option 1: a chart from a Helm repository
 
-This is the simplest approach for deploying services primarily provided as
-community Helm charts. Specify the chart, repository, and values directly in
-the `ApplicationSet`. In this scenario there's no way how one can supply
-multiple Helm value files (e.g. to distinguish between the environments) since
-the `values.yaml` file must reside in the Helm repository, to which you do not
-have access to.
-
-**Example**:
+For a third-party chart with a handful of overrides. The chart repository is
+not yours, so there is nowhere to put a values file: overrides are inline,
+and the same for every application the set generates unless a generator
+variable supplies them:
 
 ```yaml
 spec:
   template:
     spec:
       source:
+        repoURL: https://kubernetes-sigs.github.io/metrics-server
         chart: metrics-server
-        repoURL: "https://kubernetes-sigs.github.io/metrics-server"
-        targetRevision: v3.8.2
+        targetRevision: 3.12.2
         helm:
           values: |
             fullnameOverride: metrics-server
 ```
 
-### Option 2: `helm` directive with a Git repository
+## Option 2: a chart in Git
 
-Suitable approach for services requiring multiple Helm value files. Point to a
-Git directory containing the `Chart.yaml` and value files.
-
-**Example**:
+For a chart that needs a values file per environment. A directory in your
+repository holds a `Chart.yaml` that declares the real chart as a dependency,
+and the value files beside it:
 
 ```yaml
 spec:
   generators:
-    - clusters:
-        selector:
-          matchLabels:
-            name: in-cluster
+    - clusters: {}
   template:
     spec:
       source:
         repoURL: git@github.com:org/repo.git
         targetRevision: main
-        path: path-to/vault-helm-chart
+        path: charts/vault
         helm:
           valueFiles:
             - common-values.yaml
             - "{{ metadata.labels.env }}-values.yaml"
 ```
 
-**`Chart.yaml` example**:
-
-```yaml
+```yaml title="charts/vault/Chart.yaml"
 apiVersion: v2
 name: vault
 version: 1.0.0
 dependencies:
   - name: vault
-    version: 0.22.0
+    version: 0.28.1
     repository: https://helm.releases.hashicorp.com
 ```
 
-The `Chart.yaml` can reference local and remote charts under the `dependencies`
-key. You also need to remember to put the values under the respective chart's
-name as they're subcharts now.
+The dependency is a subchart, so every value in those files sits under the
+dependency’s name, `vault:`, not at the top level.
 
-### Option 3: plain `kustomization.yaml`
+## Option 3: a Kustomize directory
 
-For resources stored directly in Git without Helm dependencies, point to a path
-within repository that contains a `kustomization.yaml` file.
-
-**Example**:
+For manifests of your own. `path` names a directory with a
+`kustomization.yaml`, and Argo CD runs `kustomize build` on it:
 
 ```yaml
 spec:
@@ -123,40 +105,17 @@ spec:
       source:
         repoURL: git@github.com:org/repo.git
         targetRevision: main
-        path: path-within-repo/example
+        path: kustomize/overlays/production
 ```
 
-Then in `path-within-repo/example`, you'll have a simple `kustomization.yaml`
-that points to specific manifests.
+## Option 4: a chart inflated by Kustomize
 
-### Option 4: `helmCharts` directive in a `kustomization.yaml`
+For a third-party chart that needs patches after rendering. Kustomize’s
+`helmCharts` field downloads and renders the chart, and the rest of the
+kustomization applies to the result; the `ApplicationSet` points at the
+directory exactly as in option 3:
 
-`kustomize` has a native support for downloading Helm chart with `helmCharts`
-directive; Google's [Config Sync tutorial on Helm charts](https://cloud.google.com/kubernetes-engine/enterprise/config-sync/docs/tutorials/config-sync-helm) walks through it.
-
-This approach is best suited for a deployment that is shared as a Helm chart,
-where you do **NOT** have a requirement for having multiple Helm value files,
-but instead have a bunch of `kustomization`s you want to apply after the chart
-is rendered.
-
-An example `ApplicationSet` that uses such approach is pretty straightforward,
-you just point to the directory within repository like in the previous example.
-
-**Example**:
-
-```yaml
-spec:
-  template:
-    spec:
-      source:
-        repoURL: git@github.com:org/repo.git
-        targetRevision: main
-        path: path-to/resources
-```
-
-... and example `kustomization.yaml`:
-
-```yaml
+```yaml title="kustomize/grafana/kustomization.yaml"
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 helmCharts:
@@ -164,60 +123,73 @@ helmCharts:
     version: 8.5.1
     repo: https://grafana.github.io/helm-charts
     valuesFile: values.yaml
+patches:
+  - path: ingress-patch.yaml
 ```
 
-### Option 5: `kustomization.yaml` with `HelmChartInflationGenerator`
+Argo CD does not inflate charts by default. The repo server runs
+`kustomize build` without `--enable-helm`, and a kustomization with
+`helmCharts` fails with `must specify --enable-helm` until the option is
+added to the build flags in `argocd-cm`:
+
+```yaml title="argocd-cm.yaml"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  kustomize.buildOptions: --enable-helm
+```
+
+One values file per chart was the field’s limit for a long time. Kustomize 5
+added `additionalValuesFiles`, so common plus per-environment values no
+longer need option 5, unless the chart definition itself is shared across
+overlays.
+
+## Option 5: `HelmChartInflationGenerator`
 
 > [!WARNING] Deprecated generator
 >
-> The `HelmChartInflationGenerator` has been deprecated. It is recommended to
-> use `helmCharts`, which was intended to serve as a drop-in replacement.
-> However, as of today, it still lacks the full flexibility of its predecessor.
+> `HelmChartInflationGenerator` is deprecated in favour of `helmCharts`,
+> which now takes the same fields. What the generator still does that a
+> `helmCharts` entry cannot is be shared: one definition in a base directory,
+> referenced from every overlay, with each overlay’s own `values.yaml` merged
+> over it.
 
-This approach is currently the most flexible way to deploy a third-party Helm
-chart that requires multiple Helm values files while also applying extensive
-`kustomization`s on top of the rendered manifests. Typically, this setup
-involves multiple `kustomize` overlays.
+For a third-party chart with several overlays that each add their own values
+on top of shared ones. The generator lives in a base directory; each overlay
+references it and contributes a `values.yaml` that merges over the base’s:
 
-The definition of a `HelmChartInflationGenerator` object can be stored in a
-`helm-generator.yaml` file within the `base` overlay, e.g.:
-
-```yaml
+```yaml title="kustomize/argocd/base/helm-generator.yaml"
 apiVersion: builtin
 kind: HelmChartInflationGenerator
 metadata:
   name: argocd-helm-chart
 name: argo-cd
-version: 5.4.3
+version: 7.7.7
 repo: https://argoproj.github.io/argo-helm
 releaseName: argo
 namespace: argocd
 includeCRDs: true
 valuesFile: values.yaml
 valuesMerge: override
-valuesInline: ...
 ```
 
-In each overlay (e.g. `production`), you reference this file under the
-`generators` section:
-
-```yaml
+```yaml title="kustomize/argocd/overlays/production/kustomization.yaml"
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: argocd
 generators:
-  - ../base/helm-generator.yaml
+  - ../../base/helm-generator.yaml
 resources:
-  - ../shared
+  - ../../shared
 ```
 
-Each overlay must include a `values.yaml` file (which can be empty). The file
-can merge with, override, or replace the common values specified in
-`helm-generator.yaml`, depending on the `valuesMerge` setting in the
-`HelmChartInflationGenerator` definition.
-
-And finally, similar to the previous examples, the `ApplicationSet` points to a
-specific path within a repository that contains `kustomization.yaml`:
+Every overlay needs its own `values.yaml`, empty if it has nothing to add,
+because `valuesFile` is resolved against the overlay that runs the
+generator. The `ApplicationSet` points at the overlay, and `--enable-helm`
+applies here too:
 
 ```yaml
 spec:
@@ -226,24 +198,26 @@ spec:
       source:
         repoURL: git@github.com:org/repo.git
         targetRevision: main
-        path: path-to/yet-another-example/overlays/production
+        path: kustomize/argocd/overlays/production
 ```
 
-It’s important to consider the
-[ordering](https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/#ordering)
-of files and how `kustomize` processes them to ensure the desired outcome.
+## Limitations
 
----
+Four rendering paths in one field means four ways to be wrong, and the error
+surfaces in the repo server’s logs rather than in the manifest. `helm
+template`, `kustomize build --enable-helm` and `argocd app manifests <app>`
+are the three commands that show what Argo CD will actually apply, and a
+change to a `source` is not reviewed until one of them has run.
 
-## Conclusion
+Options 4 and 5 download the chart on every render. A repo server that
+renders many applications from the same chart fetches it many times, and an
+unreachable chart repository fails every one of them at once.
 
-Each deployment approach comes with its own strengths and limitations, making
-the choice highly dependent on the complexity of the service and its
-customization needs. Combining `ApplicationSet` with Helm and Kustomize offers
-a powerful and scalable solution for managing deployments across multiple
-clusters and environments.
+`targetRevision` means different things by kind: a chart version for a Helm
+repository, a Git ref otherwise. A generator that supplies it has to know
+which kind of source it is filling.
 
-However, this level of abstraction can be overwhelming for newcomers. The added
-complexity and multiple layers of abstraction also make local testing more
-challenging, increasing the risk of unintended changes during the development
-process.
+Option 5 is on borrowed time. Kustomize keeps the generator for
+compatibility and a future release may drop it; the overlays that share one
+generator are the ones to migrate first, each getting a `helmCharts` entry of
+its own.

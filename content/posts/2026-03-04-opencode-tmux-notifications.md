@@ -1,6 +1,6 @@
 ---
 title: OpenCode + tmux notifications for idle agents
-description: Mark waiting tmux windows and send quiet macOS notifications when an OpenCode agent needs attention.
+description: A small OpenCode plugin marks the tmux window whose agent is waiting for input, and sends a macOS notification only when the terminal is not in front.
 date: 2026-03-04 09:00:00
 categories:
   - opencode
@@ -8,34 +8,24 @@ categories:
   - developer-tools
 ---
 
-This post started after a knowledge-sharing session inside my team at work about
-how we use AI, LLMs, and agents in daily workflows.
+I keep several [OpenCode](https://opencode.ai) sessions running, one per
+[tmux](https://github.com/tmux/tmux) window. When one goes idle I know
+something finished, but not which window wants me, and a sound for every
+event ([PeonPing](https://www.peonping.com) does that, and does it well)
+pulled my attention away from whatever I was doing meanwhile. So I wrote a
+small OpenCode plugin: a marker in the tmux window list on the exact window
+that is waiting, and a macOS notification only when the terminal is not in
+front.
 
-Someone shared [PeonPing](https://www.peonping.com), which is genuinely fun and
-well-built. I tried it, liked it, and then realized it was a bit _too_ fun for
-my own day-to-day use: sounds pulled my attention away from whatever else I was
-doing while agents were running in the background.
+> [!NOTE] Versions
+>
+> OpenCode’s plugin API as of March 2026, tmux and
+> [Alacritty](https://alacritty.org) on macOS. The complete plugin and the
+> `tmux.conf` snippet are in
+> [this gist](https://gist.github.com/shmileee/f8b9d0e380a53055e14fe6403c86e2cf);
+> the listings below are condensed from it.
 
-So I went for a quieter setup and built a tiny OpenCode plugin instead, mostly
-because writing a small plugin sounded fun and practical at the same time.
-
-I use [Alacritty](https://alacritty.org) on macOS and keep multiple
-[OpenCode](https://opencode.ai) sessions in separate
-[tmux](https://github.com/tmux/tmux) windows. The problem: when one session
-turns idle, I know _something_ finished, but not _which window_ needs input.
-
-## OpenCode plugins in 30 seconds
-
-[OpenCode plugins](https://opencode.ai/docs/plugins) are small TypeScript
-modules that subscribe to OpenCode events (`session.idle`, `session.status`,
-`permission.ask`, etc.) and run custom logic when those events fire.
-
-This setup solves two things at once:
-
-1. A system notification on macOS when input is needed,
-2. A subtle marker (`●`) in tmux window list for the exact waiting session.
-
-The end result looks like this:
+## The result
 
 <figure class="media-figure media-figure-wide">
   <div class="media-frame media-frame-dark media-frame-scroll" tabindex="0" role="region" aria-label="Scrollable tmux status-line screenshot">
@@ -47,7 +37,7 @@ The end result looks like this:
     />
   </div>
   <figcaption>
-    1. tmux window list with a light ● marker on the opencode session that is waiting for input
+    The tmux window list, with a ● before the one window whose agent is waiting for input.
   </figcaption>
 </figure>
 
@@ -61,166 +51,192 @@ The end result looks like this:
     />
   </div>
   <figcaption>
-    2. popup notification with the tmux window label that needs attention
+    The notification, naming the tmux window, shown only when Alacritty is not the frontmost application.
   </figcaption>
 </figure>
 
-## Plugin walkthrough
+## How the plugin decides
 
-> [!TIP] Complete example
->
-> See the [full configuration gist](https://gist.github.com/shmileee/f8b9d0e380a53055e14fe6403c86e2cf).
+[OpenCode plugins](https://opencode.ai/docs/plugins) are TypeScript modules
+in `~/.config/opencode/plugins/`, run by Bun. A plugin exports an async
+function that returns handlers: one generic `event` handler plus named hooks
+for a few events; the shell commands below use Bun’s `$`. Everything this
+plugin does is a mapping from events to two states, the marker on the window
+and whether to notify:
 
-Save the plugin as `~/.config/opencode/plugins/tmux-window-notification.ts`.
+| Event | Meaning | Marker | Notification |
+| --- | --- | --- | --- |
+| `session.idle` | the agent finished and waits for me | on | if the terminal is not in front |
+| `permission.ask`, `permission.updated` | the agent needs an approval | on | no |
+| `session.status` with `busy` | the agent is working again | off | no |
+| `chat.message` | I typed something | off | no |
 
-### 1. Resolve the correct tmux window
+Permission prompts mark the window without a notification because they come
+in bursts while I am usually already looking. The shape of the file:
 
-The plugin pins itself to the pane where OpenCode started. Without that,
-notifications can point to whichever tmux window is currently active when the
-event happens.
+```ts title="~/.config/opencode/plugins/tmux-window-notification.ts"
+import { $ } from "bun";
+import type { Plugin } from "@opencode-ai/plugin";
 
-```ts
-const getPaneFromEnv = async (): Promise<string | null> => {
-  try {
-    const result = await $`printenv TMUX_PANE`.text();
-    const pane = result.trim();
-    return pane.length > 0 ? pane : null;
-  } catch {
-    return null;
-  }
-};
+const TITLE = "OpenCode";
+const OPTION = "@opencode_waiting";
+const MARK = "●";
+const TERMINAL = /alacritty/i;
 
-const getWindowId = async (tmuxPane: string | null): Promise<string | null> => {
-  if (!tmuxPane) return null;
+export const TmuxWindowNotification: Plugin = async () => {
+  const pane = (await $`printenv TMUX_PANE`.text()).trim() || null;
+  const windowId = pane ? await tmuxQuery(pane, "#{window_id}") : null;
 
-  try {
-    const result =
-      await $`tmux display-message -p -t ${tmuxPane} '#{window_id}'`.text();
-    const windowId = result.trim();
-    return windowId.length > 0 ? windowId : null;
-  } catch {
-    return null;
-  }
-};
-
-const getWindowLabel = async (
-  tmuxPane: string | null,
-): Promise<string | null> => {
-  if (!tmuxPane) return null;
-
-  try {
-    const result =
-      await $`tmux display-message -p -t ${tmuxPane} '#S:#I #{window_name}'`.text();
-    const label = result.trim();
-    return label.length > 0 ? label : null;
-  } catch {
-    return null;
-  }
+  return {
+    event: async ({ event }) => { /* ... below ... */ },
+    "permission.ask": async () => setWaiting(windowId, true),
+    "chat.message": async () => setWaiting(windowId, false),
+  };
 };
 ```
 
-### 2. Set or clear a waiting marker in tmux
+## Pinning the window
 
-Remove the waiting marker whenever the window gains focus.
+`TMUX_PANE` is the pane OpenCode was started in, and the plugin resolves it to
+a window id once, at load. Without that, an event would be attributed to
+whichever window happens to be active when it fires, which is the one window
+that does not need a marker:
 
 ```ts
-const TMUX_WAITING_OPTION = "@opencode_waiting";
-const TMUX_WAITING_SYMBOL = "●";
+const tmuxQuery = async (target: string, format: string) => {
+  const args = ["display-message", "-p", "-t", target, format];
+  return (await $`tmux ${args}`.text()).trim();
+};
+
+// "work:3 api": session, window index and name for the notification
+const windowLabel = (pane: string) =>
+  tmuxQuery(pane, "#S:#I #{window_name}");
+```
+
+## The marker
+
+The marker is a tmux window option, set or unset on the pinned window; the
+status line draws it, and tmux clears it when the window is selected. The
+plugin remembers the last state so that a burst of events sends one command,
+not one per event:
+
+```ts
 let waitingState: boolean | null = null;
 
-const setWaitingIndicator = async (
-  tmuxWindowId: string | null,
+const setWaiting = async (
+  windowId: string | null,
   waiting: boolean,
-  force: boolean = false,
-): Promise<void> => {
-  if (!tmuxWindowId) return;
-  if (!force && waitingState === waiting) return;
-
+) => {
+  if (!windowId || waitingState === waiting) return;
+  const args = waiting
+    ? ["-q", "-t", windowId, OPTION, MARK]
+    : ["-q", "-u", "-t", windowId, OPTION];
   try {
-    if (waiting) {
-      await $`tmux set-window-option -q -t ${tmuxWindowId} ${TMUX_WAITING_OPTION} ${TMUX_WAITING_SYMBOL}`;
-    } else {
-      await $`tmux set-window-option -q -u -t ${tmuxWindowId} ${TMUX_WAITING_OPTION}`;
-    }
+    await $`tmux set-window-option ${args}`;
     waitingState = waiting;
   } catch {
-    // Ignore tmux update failures.
+    // tmux is gone or the window is; nothing to mark
   }
 };
 ```
 
-### 3. Send a macOS notification
+## The notification
 
-You get desktop notifications when away, but no popup noise when Alacritty is
-already focused.
+macOS notifications go through `osascript`. The frontmost application is
+checked first, so a session that finishes while the terminal is already in
+front produces a marker and no popup:
 
 ```ts
-const isAlacrittyFocused = async (): Promise<boolean> => {
+const FRONTMOST = [
+  'tell application "System Events"',
+  "to get name of first application process whose frontmost is true",
+].join(" ");
+
+const terminalInFront = async () => {
   try {
-    const result =
-      await $`osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`.text();
-    return /alacritty/i.test(result.trim());
+    const name = (await $`osascript -e ${FRONTMOST}`.text()).trim();
+    return TERMINAL.test(name);
   } catch {
     return false;
   }
 };
 
-const notify = async (message: string): Promise<void> => {
-  await $`osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title (item 2 of argv) sound name "Pop"' -e 'end run' ${message} ${NOTIFICATION_TITLE}`;
-};
-
-return {
-  event: async ({ event }) => {
-    if (event.type === "session.status") {
-      const status = event.properties?.status;
-      const statusType = typeof status === "object" ? status?.type : status;
-      if (statusType === "busy") {
-        await setWaitingIndicator(tmuxWindowId, false);
-      }
-      return;
-    }
-
-    if (event.type === "permission.updated") {
-      await setWaitingIndicator(tmuxWindowId, true);
-      return;
-    }
-
-    if (event.type !== "session.idle") return;
-
-    await setWaitingIndicator(tmuxWindowId, true);
-    if (await isAlacrittyFocused()) return;
-
-    const windowLabel = await getWindowLabel(tmuxPane);
-    await notify(
-      windowLabel
-        ? `Waiting for input in ${windowLabel}`
-        : "Waiting for your input",
-    );
-  },
-
-  "permission.ask": async () => {
-    await setWaitingIndicator(tmuxWindowId, true);
-  },
-
-  "chat.message": async () => {
-    await setWaitingIndicator(tmuxWindowId, false);
-  },
+const notify = async (message: string) => {
+  const script = [
+    "on run argv",
+    "set {msg, ttl} to argv",
+    'display notification msg with title ttl sound name "Pop"',
+    "end run",
+  ];
+  const flags = script.flatMap((line) => ["-e", line]);
+  await $`osascript ${flags} ${message} ${TITLE}`;
 };
 ```
 
-## Relevant `tmux.conf` snippet
+## The event handler
 
-```text
-# show waiting marker in window list
-setw -g window-status-current-format ' #{?@opencode_waiting,#[fg=colour153]#{@opencode_waiting} ,}#I#[fg=colour250]:#[fg=colour255]#W#[fg=colour50]#F '
-setw -g window-status-format ' #{?@opencode_waiting,#[fg=colour153]#{@opencode_waiting} ,}#I#[fg=colour237]:#[fg=colour250]#W#[fg=colour244]#F '
+The generic handler carries the mapping from the table. `session.status`
+arrives with a status that is a string in some events and an object in
+others, hence the unwrapping:
 
-# clear marker when you focus/switch windows
-set-hook -g after-select-window 'set-window-option -q -u @opencode_waiting'
-set-hook -g session-window-changed 'set-window-option -q -u @opencode_waiting'
-set-hook -g client-focus-in 'set-window-option -q -u @opencode_waiting'
+```ts
+event: async ({ event }) => {
+  if (event.type === "session.status") {
+    const status = event.properties?.status;
+    const type = typeof status === "object" ? status?.type : status;
+    if (type === "busy") await setWaiting(windowId, false);
+    return;
+  }
+
+  if (event.type === "permission.updated") {
+    await setWaiting(windowId, true);
+    return;
+  }
+
+  if (event.type !== "session.idle") return;
+
+  await setWaiting(windowId, true);
+  if (await terminalInFront()) return;
+
+  const label = pane ? await windowLabel(pane) : null;
+  await notify(
+    label ? `Waiting for input in ${label}` : "Waiting for your input",
+  );
+},
 ```
 
-The end result is exactly what I wanted: if an agent is waiting, I can spot the
-right tmux window instantly, and I still get desktop alerts when I am away from
-terminal focus.
+## The tmux side
+
+The status line shows the marker when the option is set, and three hooks
+clear it when the window is selected or the client regains focus:
+
+```text title="~/.tmux.conf"
+# the marker, drawn before the window index while the option is set
+set -g @waiting '#{?@opencode_waiting,#[fg=colour153]● ,}'
+setw -g window-status-current-format ' #{E:@waiting}#I:#W#F '
+setw -g window-status-format ' #{E:@waiting}#I:#W#F '
+
+# clear it when the window is selected or the terminal regains focus
+set-hook -g after-select-window 'setw -qu @opencode_waiting'
+set-hook -g session-window-changed 'setw -qu @opencode_waiting'
+set-hook -g client-focus-in 'setw -qu @opencode_waiting'
+```
+
+`#{E:@waiting}` expands the option’s value as a format, so the conditional
+lives in one place and the two window formats only reference it.
+
+## Limitations
+
+Everything about the notification is macOS: `osascript` for the popup and
+for the frontmost check. On Linux the same two calls would be `notify-send`
+and a compositor-specific query.
+
+The terminal is a regular expression on the frontmost application’s name,
+so a different terminal means editing `TERMINAL`.
+
+`TMUX_PANE` has to be in OpenCode’s environment, which it is when OpenCode
+is started from inside tmux. Started elsewhere, the plugin still notifies,
+with the generic text, and marks nothing.
+
+The marker belongs to a window, not a session. Two OpenCode sessions in one
+window share it, and selecting the window clears it for both.
