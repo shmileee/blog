@@ -1,6 +1,6 @@
 ---
 title: Generating Terraform for teams from one JSON file
-description: Developers describe their team’s Slack channel, GitHub teams and on-call rotation in one JSON file, and everything else is generated.
+description: "Self-service for developers: a team describes its Slack channel, GitHub teams and on-call rotation in one JSON file, and the Terraform is generated."
 date: 2026-09-18 09:00:00
 categories:
   - terraform
@@ -335,7 +335,9 @@ commit touching every team directory.
 
 ## What’s next?
 
-Everything so far assumes the layout already exists.
+The next post in the series is about doing this at scale: taking an existing
+repository of a few hundred flat Terraform directories into the layout the
+first three posts describe, one stack at a time, with a plan gate strict enough
+that an agent can do the moving.
 [Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/)
-is about getting there from a flat repository: one stack at a time, behind a
-plan gate strict enough that an agent can do the moving.
+is that procedure, and what it took to hand it over.
