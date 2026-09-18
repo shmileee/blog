@@ -30,14 +30,15 @@ is the Terraform for it, and the two permissions that are easy to miss.
 A pull through cache rule maps a prefix in your registry to one upstream. A
 client pulls from your registry under that prefix, ECR fetches the image from
 the upstream on the first request and creates a repository for it, and every
-later pull is served from ECR:
+later pull is served from ECR. The first path segment after the registry is
+the rule’s prefix:
 
-| Upstream | Prefix | Image reference to pull |
-| --- | --- | --- |
-| `registry-1.docker.io` | `docker-hub` | `<registry>/docker-hub/library/python:3.12` |
-| `public.ecr.aws` | `public-ecr` | `<registry>/public-ecr/ubuntu/ubuntu:edge` |
-| `quay.io` | `quay` | `<registry>/quay/prometheus/node-exporter:v1.8.2` |
-| `registry.k8s.io` | `registry-k8s-io` | `<registry>/registry-k8s-io/pause:3.10` |
+| Upstream | Image reference to pull |
+| --- | --- |
+| `registry-1.docker.io` | `<registry>/docker-hub/library/python:3.12` |
+| `public.ecr.aws` | `<registry>/public-ecr/ubuntu/ubuntu:edge` |
+| `quay.io` | `<registry>/quay/coreos/etcd:v3.5.16` |
+| `registry.k8s.io` | `<registry>/registry-k8s-io/pause:3.10` |
 
 `<registry>` is `111111111111.dkr.ecr.eu-west-1.amazonaws.com` throughout.
 Two things follow from “creates a repository on the first pull”. The identity

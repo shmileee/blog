@@ -32,13 +32,22 @@ issuer, from which it fetches the issuer’s public keys. An IAM role’s trust
 policy names that provider and puts conditions on the claims; a job that
 presents a token matching them may call `sts:AssumeRoleWithWebIdentity` and
 gets credentials for the role, valid for an hour by default. Nothing is
-stored anywhere, so the conditions are the only place access is decided:
+stored anywhere, so the conditions are the only place access is decided.
+The claims a GitHub Actions job presents:
 
-| Claim | GitHub Actions | CircleCI |
-| --- | --- | --- |
-| `iss` | `https://token.actions.githubusercontent.com` | `https://oidc.circleci.com/org/<org-id>` |
-| `aud` | `sts.amazonaws.com` | `<org-id>` |
-| `sub` | `repo:<org>/<repo>:ref:refs/heads/main` | `org/<org-id>/project/<project-id>/user/<user-id>` |
+| Claim | Value |
+| --- | --- |
+| `iss` | `https://token.actions.githubusercontent.com` |
+| `aud` | `sts.amazonaws.com` |
+| `sub` | `repo:<org>/<repo>:ref:refs/heads/main` |
+
+And a CircleCI job’s:
+
+| Claim | Value |
+| --- | --- |
+| `iss` | `https://oidc.circleci.com/org/<org-id>` |
+| `aud` | `<org-id>` |
+| `sub` | `org/<org-id>/project/<project-id>/user/<user-id>` |
 
 GitHub’s subject carries the repository and the ref, so the trust policy
 below conditions on `sub`. CircleCI’s issuer is already scoped to one

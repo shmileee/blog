@@ -60,10 +60,10 @@ spec:
 The controller creates two `Application`s from it, and keeps them in step
 with the list: an element removed is an application deleted.
 
-| Application | `source.path` | `helm.valueFiles` | `destination.namespace` |
-| --- | --- | --- | --- |
-| `atlantis` | `charts/atlantis` | `atlantis-values.yaml` | `automation` |
-| `crossplane` | `charts/crossplane` | `crossplane-values.yaml` | `crossplane-system` |
+| Application | `helm.valueFiles` | `destination.namespace` |
+| --- | --- | --- |
+| `atlantis` | `atlantis-values.yaml` | `automation` |
+| `crossplane` | `crossplane-values.yaml` | `crossplane-system` |
 
 ## The cluster generator
 
@@ -100,13 +100,13 @@ spec:
         namespace: kube-system
 ```
 
-With two registered clusters, `california` labelled `env: development` and
-`monaco` labelled `env: production`:
+With two registered clusters, `east` labelled `env: development` and `west`
+labelled `env: production`:
 
-| Application | `helm.valueFiles` | `destination.server` |
+| Application | Cluster | `helm.valueFiles` |
 | --- | --- | --- |
-| `metrics-server-california` | `development-values.yaml` | california’s API server |
-| `metrics-server-monaco` | `production-values.yaml` | monaco’s API server |
+| `metrics-server-east` | `east` | `development-values.yaml` |
+| `metrics-server-west` | `west` | `production-values.yaml` |
 
 ## The matrix generator
 
@@ -139,8 +139,8 @@ spec:
 ```
 
 Two applications times the same two clusters is four `Application`s:
-`external-dns-california`, `external-dns-monaco`, `cert-manager-california`
-and `cert-manager-monaco`.
+`external-dns-east`, `external-dns-west`, `cert-manager-east` and
+`cert-manager-west`.
 
 ## A revision per environment
 

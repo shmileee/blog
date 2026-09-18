@@ -64,12 +64,12 @@ for a few events; the shell commands below use Bun’s `$`. Everything this
 plugin does is a mapping from events to two states, the marker on the window
 and whether to notify:
 
-| Event | Meaning | Marker | Notification |
-| --- | --- | --- | --- |
-| `session.idle` | the agent finished and waits for me | on | if the terminal is not in front |
-| `permission.ask`, `permission.updated` | the agent needs an approval | on | no |
-| `session.status` with `busy` | the agent is working again | off | no |
-| `chat.message` | I typed something | off | no |
+| Event | Meaning | Effect |
+| --- | --- | --- |
+| `session.idle` | the agent finished and waits for me | marker on; notify unless the terminal is in front |
+| `permission.ask`, `permission.updated` | the agent needs an approval | marker on |
+| `session.status` with `busy` | the agent is working again | marker off |
+| `chat.message` | I typed something | marker off |
 
 Permission prompts mark the window without a notification because they come
 in bursts while I am usually already looking. The shape of the file:

@@ -130,8 +130,8 @@ spec:
       image: public.ecr.aws/ubuntu/ubuntu:edge
 ```
 
-The four Docker Hub images come out fully qualified under the cache; the ECR
-Public one is not this rule’s business:
+The four Docker Hub images come out fully qualified under the cache, and
+the ECR Public one, not this rule’s business, comes out unchanged:
 
 | Image in the manifest | After the policy |
 | --- | --- |
@@ -139,7 +139,6 @@ Public one is not this rule’s business:
 | `library/nginx` | `<registry>/docker-hub/library/nginx:latest` |
 | `docker.io/library/nginx` | `<registry>/docker-hub/library/nginx:latest` |
 | `docker.io/acme/api:1.4` | `<registry>/docker-hub/acme/api:1.4` |
-| `public.ecr.aws/ubuntu/ubuntu:edge` | unchanged |
 
 ## Init and ephemeral containers
 

@@ -25,15 +25,15 @@ one constraint that decides for it.
 
 ## What `source` needs, by kind
 
-| Field | Chart from a Helm repository | Chart in Git | Kustomize directory |
+| Field | Helm repo | Chart in Git | Kustomize |
 | --- | --- | --- | --- |
-| `repoURL` | the chart repository | the Git repository | the Git repository |
-| `targetRevision` | the chart version | branch or tag | branch or tag |
-| `path` | — | directory holding `Chart.yaml` | directory holding `kustomization.yaml` |
-| `chart` | the chart name | — | — |
+| `repoURL` | chart repository | Git repository | Git repository |
+| `targetRevision` | chart version | branch or tag | branch or tag |
+| `path` | — | chart directory | overlay directory |
+| `chart` | chart name | — | — |
 | `helm.values` | inline values | inline values | — |
-| `helm.valueFiles` | — | files in the directory | — |
-| `kustomize.*` | — | — | images, patches, name prefixes |
+| `helm.valueFiles` | — | files beside it | — |
+| `kustomize.*` | — | — | images, patches |
 
 Generator variables can appear in any of these; `{{ metadata.labels.env }}`
 inside a `valueFiles` entry is how one set serves several environments.
