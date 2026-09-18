@@ -30,8 +30,8 @@ Google Secret Manager or Vault. This note is that module.
 
 ## What the copies look like
 
-The [PagerDuty provider](https://registry.terraform.io/providers/PagerDuty/pagerduty/latest/docs)
-needs a token before it can do anything. In a root module that keeps it in AWS
+The [FireHydrant provider](https://registry.terraform.io/providers/firehydrant/firehydrant/latest/docs)
+needs an API key before it can do anything. In a root module that keeps it in AWS
 Secrets Manager (laid out one directory per environment, the pre-Terramate
 way), that is an
 [`aws_secretsmanager_secret_version`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/secretsmanager_secret_version)
@@ -39,16 +39,16 @@ data source, a `jsondecode` and a key lookup, all next to the provider block
 they feed:
 
 ```hcl title="app/oncall/production/providers.tf"
-data "aws_secretsmanager_secret_version" "pagerduty" {
-  secret_id = "infrastructure/pagerduty"
+data "aws_secretsmanager_secret_version" "firehydrant" {
+  secret_id = "infrastructure/firehydrant"
 }
 
-provider "pagerduty" {
-  token = jsondecode(data.aws_secretsmanager_secret_version.pagerduty.secret_string)["api_token"]
+provider "firehydrant" {
+  api_key = jsondecode(data.aws_secretsmanager_secret_version.firehydrant.secret_string)["api_key"]
 }
 ```
 
-Every stack that touches PagerDuty has its own copy of this, and the copies
+Every stack that touches FireHydrant has its own copy of this, and the copies
 stop being identical quickly. One reads a secret that has since been renamed and
 fails on the next plan. Another reads one that still exists and holds a
 credential that was superseded elsewhere. A third reads the right secret and
@@ -96,10 +96,10 @@ requested subset is filtered out of the result:
 ```hcl
 locals {
   secret_paths = {
-    github     = "infrastructure/github-app"
-    pagerduty  = "infrastructure/pagerduty"
-    slack      = "infrastructure/slack"
-    postgresql = "infrastructure/postgres/default"
+    github      = "infrastructure/github-app"
+    firehydrant = "infrastructure/firehydrant"
+    slack       = "infrastructure/slack"
+    postgresql  = "infrastructure/postgres/default"
   }
 
   merged_secret_paths = merge(local.secret_paths, var.custom_paths)
@@ -141,7 +141,7 @@ output "secrets" {
 Each secret is a JSON document, so the output is one map per requested name.
 The module never enumerates the keys inside, so adding a field to a secret
 needs no change here, and a consumer reads
-`module.providers_credentials.secrets.pagerduty.api_token` directly.
+`module.providers_credentials.secrets.firehydrant.api_key` directly.
 
 ## Validating the request
 
@@ -172,7 +172,7 @@ terraform plan
 #   on providers.tf line 3, in module "providers_credentials":
 #    3:   terraform_providers = ["github", "datadog"]
 #
-# Unknown names. Known: github, pagerduty, postgresql, slack.
+# Unknown names. Known: firehydrant, github, postgresql, slack.
 ```
 
 That message is the module’s documentation as far as most callers are
@@ -212,16 +212,16 @@ particular encoding: a store that already returns structured data needs no
 ## Consuming it from a stack
 
 In a plain Terraform stack the module block replaces the data source, and the
-provider reads its token from the output:
+provider reads its API key from the output:
 
 ```hcl title="app/oncall/production/providers.tf"
 module "providers_credentials" {
   source              = "../../../modules/providers-credentials"
-  terraform_providers = ["pagerduty"]
+  terraform_providers = ["firehydrant"]
 }
 
-provider "pagerduty" {
-  token = module.providers_credentials.secrets.pagerduty.api_token
+provider "firehydrant" {
+  api_key = module.providers_credentials.secrets.firehydrant.api_key
 }
 ```
 

@@ -146,7 +146,7 @@ of block from them:
 
 <figure class="concept-diagram wide" data-concept-diagram>
   <div class="diagram-exhibit" data-exhibit>
-    <svg viewBox="0 0 640 292" role="img" aria-label="Two inputs, the map global.terraform.providers with a key per provider or alias, and let.credentials with references kept as strings, enter one generate_hcl block. It emits five kinds of block: required_providers from the keys without a dot; a provider block per such key with the config from its declaration; an aliased provider block per key with a dot; a module block, providers_credentials, for the providers that need a token; and provider blocks such as pagerduty whose token comes from that module.">
+    <svg viewBox="0 0 640 292" role="img" aria-label="Two inputs, the map global.terraform.providers with a key per provider or alias, and let.credentials with references kept as strings, enter one generate_hcl block. It emits five kinds of block: required_providers from the keys without a dot; a provider block per such key with the config from its declaration; an aliased provider block per key with a dot; a module block, providers_credentials, for the providers that need a credential; and provider blocks such as firehydrant whose API key comes from that module.">
       <defs>
         <marker id="prov-arrow-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
           <path d="M0 0 L10 5 L0 10 z" fill="var(--color-border)" />
@@ -182,8 +182,8 @@ of block from them:
       <text x="378" y="211" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">providers that need a token</text>
       <path d="M616 210 C 636 210, 636 246, 618 246" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-b)" />
       <rect x="366" y="232" width="250" height="44" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
-      <text x="378" y="251" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">provider "pagerduty"</text>
-      <text x="378" y="267" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">token from the module above</text>
+      <text x="378" y="251" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">provider "firehydrant"</text>
+      <text x="378" y="267" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">API key from the module above</text>
     </svg>
   </div>
   <figcaption class="exhibit-caption">One generator, two inputs, five kinds of output; the module block’s outputs feed the provider blocks that need a token.</figcaption>
@@ -307,8 +307,8 @@ lets {
   secrets = "module.providers_credentials.secrets"
 
   credentials = {
-    pagerduty = {
-      token = "${let.secrets}.pagerduty.api_token"
+    firehydrant = {
+      api_key = "${let.secrets}.firehydrant.api_key"
     }
   }
 
@@ -400,25 +400,28 @@ globals "terraform" "providers" "github" {
   }
 }
 
-globals "terraform" "providers" "pagerduty" {
+globals "terraform" "providers" "firehydrant" {
   enabled = true
-  source  = "pagerduty/pagerduty"
-  version = "~> 3.0"
+  source  = "firehydrant/firehydrant"
+  version = "~> 0.15"
 }
 ```
 
-GitHub and PagerDuty have credential entries, so the stack gets the module
+FireHydrant and GitHub have credential entries, so the stack gets the module
 block and each of those providers gets its references:
 
 ```hcl title="stacks/saas/github/001_terramate_generated_providers.tf"
-// ... required_providers for aws, github and pagerduty; provider "aws" ...
+// ... required_providers for aws, firehydrant and github; provider "aws" ...
 
 module "providers_credentials" {
   source = "../../../modules/providers-credentials"
   terraform_providers = [
+    "firehydrant",
     "github",
-    "pagerduty",
   ]
+}
+provider "firehydrant" {
+  api_key = module.providers_credentials.secrets.firehydrant.api_key
 }
 provider "github" {
   owner = "acme"
@@ -427,9 +430,6 @@ provider "github" {
     installation_id = module.providers_credentials.secrets.github.app_installation_id
     pem_file        = base64decode(module.providers_credentials.secrets.github.private_key_b64)
   }
-}
-provider "pagerduty" {
-  token = module.providers_credentials.secrets.pagerduty.api_token
 }
 ```
 
