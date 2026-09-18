@@ -7,25 +7,33 @@ categories:
   - terramate
 ---
 
-A Terraform module that provisions nothing: it takes a list of logical names,
-looks each one up in a registry of secret identifiers, and returns the secret
-data as one map, so no stack in the repository contains a secret identifier. A
-stack names what it needs, and the module is the single place that knows where
-that lives and how to read it. It is ordinary Terraform, callable from any root
-module, and it is shown in a plain stack first; the stacks it was written for
-live in the Terramate monorepo from
-[part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/), where
-the module call itself is generated. This is the second post in a series on
-Terraform and Terramate.
+I have watched the same thing happen in several codebases. A provider needs a
+token, so someone reads it from the secrets store, a data source and a
+`jsondecode` beside the `provider` block, and the next stack that needs the
+same provider copies both. With a handful of stacks that is fine. With dozens,
+the copies are the maintenance problem: every renamed secret, every rotated key
+and every new provider is a search through root modules.
 
-Validated with Terraform 1.15.8 against a scratch repository; secret names are
-placeholders.
+What I do instead is put the lookup behind a data-only Terraform module. A
+stack names the credentials it needs; the module is the one place that knows
+where each one lives and how to read it, whether that is
+[AWS Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html),
+Google Secret Manager or Vault. This note is that module.
 
-## The credential sprawl problem
+> [!NOTE] Standalone
+>
+> Plain Terraform, callable from any root module, validated with Terraform
+> 1.15.8 against a scratch repository; secret names are placeholders. The
+> [Terramate series](/blog/posts/structuring-a-terraform-monorepo-with-terramate/)
+> on this site uses the module, and generates the call to it, but nothing here
+> depends on Terramate.
 
-The PagerDuty provider needs a token before it can do anything. In a root
-module that keeps it in AWS Secrets Manager (laid out the pre-Terramate way
-here, one directory per environment), that is an
+## What the copies look like
+
+The [PagerDuty provider](https://registry.terraform.io/providers/PagerDuty/pagerduty/latest/docs)
+needs a token before it can do anything. In a root module that keeps it in AWS
+Secrets Manager (laid out one directory per environment, the pre-Terramate
+way), that is an
 [`aws_secretsmanager_secret_version`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/secretsmanager_secret_version)
 data source, a `jsondecode` and a key lookup, all next to the provider block
 they feed:
@@ -36,9 +44,7 @@ data "aws_secretsmanager_secret_version" "pagerduty" {
 }
 
 provider "pagerduty" {
-  token = jsondecode(
-    data.aws_secretsmanager_secret_version.pagerduty.secret_string
-  )["api_token"]
+  token = jsondecode(data.aws_secretsmanager_secret_version.pagerduty.secret_string)["api_token"]
 }
 ```
 
@@ -151,10 +157,7 @@ validation {
     for name in var.terraform_providers :
     contains(keys(local.merged_secret_paths), name)
   ])
-  error_message = format(
-    "Unknown names. Known: %s.",
-    join(", ", keys(local.secret_paths)),
-  )
+  error_message = "Unknown names. Known: ${join(", ", keys(local.secret_paths))}."
 }
 ```
 
@@ -224,17 +227,16 @@ provider "pagerduty" {
 
 The stack no longer contains a secret identifier, and a renamed secret is a
 one-line change to the registry instead of a search through root modules. What
-it still contains is a module block and a provider block written by hand, and
-in a repository of a few hundred stacks those are the next thing to stop
-writing. With Terramate a stack declares which providers it enables, and a
-generator emits both blocks with the list of names computed from that
-declaration; that generator is the next post.
+it still contains is a module block and a provider block written by hand. In a
+repository of a few hundred stacks those are the next thing to stop writing,
+and with Terramate they can be generated from the providers a stack declares;
+[Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/)
+shows that generator.
 
 Secrets often live in a different account from the resources a stack manages.
 Where they do, the caller passes the reader explicitly,
 `providers = { aws = aws.shared-services }`, naming an aliased AWS provider the
-stack already declares (part three generates those aliases). The module assumes
-nothing about where it reads from.
+stack already declares. The module assumes nothing about where it reads from.
 
 ## Limitations
 
@@ -253,14 +255,15 @@ credential requires a new plan rather than an apply of the existing one.
 
 The registry is a local in one module, which means adding a name is a change to
 a shared file that every stack consumes. That is the point of the pattern, and
-it also puts the module on the critical path of a great many plans: **273 of the
-508 stacks** in the repository this comes from instantiate it. Treat changes to
-it accordingly.
+it also puts the module on the critical path of a great many plans: in the
+production repository this comes from, more than half of the stacks instantiate
+it. Treat changes to it accordingly.
 
-## What’s next?
+## Where this goes next
 
 The module block above is one more thing to write per stack, and the list of
-names in it follows from the providers the stack declares.
-[Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/)
-covers the generator that computes that list and emits the module call, the
-provider blocks and the version constraints together.
+names in it follows from the providers the stack declares. In the
+[Terramate series](/blog/posts/structuring-a-terraform-monorepo-with-terramate/)
+that list is computed and the block emitted by a generator, together with the
+provider blocks and their version constraints:
+[Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/).

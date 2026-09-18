@@ -7,17 +7,17 @@ categories:
   - terramate
 ---
 
-Moving a flat Terraform repository into Terramate stacks, one stack at a time,
-without destroying or moving anything. The procedure is deliberately boring,
-and the gate at the end of it is mechanical enough to hand to someone, or
-something, that has never seen the stack before. It is the fifth post in a
-series on Terraform and Terramate, after
-[Generating Terraform for teams from one JSON file](/blog/posts/generating-terraform-for-teams-from-one-json-file/).
+One stack at a time, nothing destroyed, nothing moved: the code is moved, the
+state object is copied, and a plan with no changes is the proof. The procedure
+is boring on purpose, boring enough to hand to an agent.
 
-Versions are Terramate 0.17.3 with Terraform 1.15.8. The procedure is the one
-used on a private monorepo of 508 stacks, where **85 legacy stacks have moved
-this way so far** and 30 are still waiting; buckets, keys and account names are
-placeholders.
+> [!NOTE] Series and versions
+>
+> Fourth post in a series on Terraform and Terramate, after
+> [Generating Terraform for teams from one JSON file](/blog/posts/generating-terraform-for-teams-from-one-json-file/).
+> Versions are Terramate 0.17.3 with Terraform 1.15.8. This is the procedure
+> used on a private monorepo where most of the legacy stacks have already moved
+> this way; buckets, keys and account names are placeholders.
 
 ## One stack at a time, in the right order
 

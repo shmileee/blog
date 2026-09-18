@@ -7,21 +7,20 @@ categories:
   - terramate
 ---
 
-A pattern for generating Terraform provider configuration from a single
-[**Terramate**](https://terramate.io/docs/cli/) generator instead of copying
-`provider` blocks into every root module: a stack declares which providers it
-needs and nothing else, and the version constraint, the `provider` block and
-the credential plumbing are derived from that declaration. It is the third post
-in a series on Terraform and Terramate, after
-[the repository layout](/blog/posts/structuring-a-terraform-monorepo-with-terramate/)
-these generators live in and
-[the module](/blog/posts/one-terraform-module-for-provider-credentials/) they read
-secrets through.
+Every root module in a Terraform monorepo carries the same `required_providers`
+and `provider` blocks, copied from the last one. Here a stack declares only
+which providers it needs, and one generator renders the rest: the version
+constraints, the provider blocks and the credentials they read.
 
-The layout assumed throughout is `stacks/aws/<account-alias>/<region>/<stack>`,
-with Terramate globals declared at each level and inherited downward. Tested
-with Terramate 0.17.3 and Terraform 1.15.8; account names, profiles and secret
-paths are placeholders.
+> [!NOTE] Series and versions
+>
+> Second post in a series on Terraform and Terramate, after
+> [the repository layout](/blog/posts/structuring-a-terraform-monorepo-with-terramate/)
+> these generators live in; the layout is `stacks/aws/<account>/<region>/<stack>`
+> with globals inherited downward. Credentials come from
+> [a data-only module](/blog/posts/one-terraform-module-for-provider-credentials/)
+> described in its own note. Tested with Terramate 0.17.3 and Terraform 1.15.8;
+> account names, profiles and secret paths are placeholders.
 
 ## The provider boilerplate problem
 
@@ -212,8 +211,8 @@ provider "aws" {
 ## Wiring credentials into providers
 
 Most SaaS providers need a token, and the token comes from the
-[lookup module](/blog/posts/one-terraform-module-for-provider-credentials/) that
-part two covers. A generated attribute is rendered as a value, so a reference
+[lookup module](/blog/posts/one-terraform-module-for-provider-credentials/)
+described in its own note. A generated attribute is rendered as a value, so a reference
 to that module’s output would land in the output file as a quoted string. The
 generator keeps the references as strings and converts them with
 [`tm_hcl_expression`](https://terramate.io/docs/cli/code-generation/functions/tm_hcl_expression),
@@ -360,9 +359,9 @@ Because the output is committed and generation is
 [enforced in continuous integration](/blog/posts/structuring-a-terraform-monorepo-with-terramate/),
 a provider change arrives in review as one edit to a declaration plus the exact
 set of stacks it rewrites. Moving the AWS provider to the next major version is
-a single `version` field in `stacks/imports/aws/provider.tm.hcl`. In a
-repository of 508 stacks, that one field feeds **445 generated provider
-blocks**. The diff that comes with it names every stack that picks the change
+a single `version` field in `stacks/imports/aws/provider.tm.hcl`. In the
+production repository this comes from, that one field feeds several hundred
+generated provider blocks. The diff that comes with it names every stack that picks the change
 up, and `terramate list --changed` on the branch is the list the pipeline will
 plan.
 

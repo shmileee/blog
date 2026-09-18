@@ -7,14 +7,17 @@ categories:
   - terramate
 ---
 
-An inventory of every stack in a Terramate repository and where each one is
-deployed, assembled from the same packages the `terramate` command uses rather
-than from the directory tree. It is the sixth post in a series on Terraform and
-Terramate, after
-[Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/).
+Five levels of directories answer every question a machine asks of a
+repository and none a person asks. The inventory below gets “where does this
+stack run” back, built from the same Go packages the `terramate` command uses
+rather than from the tree.
 
-The inventory program was written and run against a scratch repository with
-Terramate 0.17.3 and Terraform 1.15.8; account names are placeholders.
+> [!NOTE] Series and versions
+>
+> Fifth post in a series on Terraform and Terramate, after
+> [Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/).
+> The inventory program was written and run against a scratch repository with
+> Terramate 0.17.3 and Terraform 1.15.8; account names are placeholders.
 
 ## What the deep tree costs
 
@@ -47,8 +50,9 @@ stack name exists several times over:
 The tree is better for everything a machine does with it and worse for every
 question a person asks of it. "Where does `foundation` run" was a directory
 listing and is now a search with a mental model attached. The repository this
-comes from has **508 stack directories that resolve to 223 distinct stack
-names**, and its most duplicated name exists in 20 places at once.
+comes from has roughly five hundred stack directories that resolve to a little
+over two hundred distinct names, and its most duplicated name exists in about
+twenty places at once.
 
 What a person wants is the inverse of the tree: one row per stack identity, with
 its deployments underneath.
@@ -127,7 +131,7 @@ inventory in under a hundred lines:
 ```text
 STACK                                         ACCOUNT           REGION     ENV
 /stacks/aws/acme-development/eu-west-1/acm    acme-development  eu-west-1  development
-/stacks/aws/acme-production/eu-west-1/acm-v2  acme-production   eu-west-1  production
+/stacks/aws/acme-production/eu-west-1/dns     acme-production   eu-west-1  production
 /stacks/saas/github                           -                 -          operations
 /stacks/teams/team-payments                   acme-operations   eu-west-1  operations
 /stacks/teams/team-platform                   acme-operations   eu-west-1  operations

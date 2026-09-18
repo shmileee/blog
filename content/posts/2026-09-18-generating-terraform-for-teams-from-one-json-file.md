@@ -7,20 +7,19 @@ categories:
   - terramate
 ---
 
-A self-service model where a team’s infrastructure is described by one
-`team.json` file and everything else is generated, so adding a team is a
-directory, a JSON file and a pull request: no one writes Terraform, and no one
-reviews Terraform that was copied from another team. Teams live in their own
-subtree, `stacks/teams/<team>`, beside the account-and-region hierarchy the
-rest of the repository uses rather than inside it, because a team is not a
-thing that belongs to one AWS account. It is the fourth post in a series on
-Terraform and Terramate, after
-[Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/).
+Adding a team is a directory, a JSON file and a pull request. Nobody writes
+Terraform for it and nobody reviews Terraform copied from another team: the
+descriptor says what the team has, and a generator turns that into module
+calls.
 
-Transcripts come from a two-team scratch repository with Terramate 0.17.3,
-Terraform 1.15.8 and
-[check-jsonschema](https://github.com/python-jsonschema/check-jsonschema) 0.38;
-platform names are generic.
+> [!NOTE] Series and versions
+>
+> Third post in a series on Terraform and Terramate, after
+> [Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/).
+> Transcripts come from a two-team scratch repository with Terramate 0.17.3,
+> Terraform 1.15.8 and
+> [check-jsonschema](https://github.com/python-jsonschema/check-jsonschema) 0.38;
+> platform names are generic.
 
 ## Why a team is infrastructure
 
@@ -51,8 +50,11 @@ policy half.
 
 ## The team descriptor
 
-The team’s directory name is its identity, and the only other required file is
-the descriptor:
+Teams live in their own subtree, `stacks/teams/<team>`, beside the
+account-and-region hierarchy the rest of the repository uses rather than inside
+it, because a team is not a thing that belongs to one AWS account. The team’s
+directory name is its identity, and the only other required file is the
+descriptor:
 
 ```json title="stacks/teams/team-platform/team.json"
 {
@@ -187,7 +189,7 @@ generate_hcl "100_terramate_generated_github_teams.tf" {
 
 A block whose condition is false produces no file, so the generated files mirror
 the descriptor’s top-level keys. Two teams, one with three platforms and one
-with an empty descriptor, generate this (`[+]` marks a file written):
+with an empty descriptor, generate this:
 
 ```text
 terramate generate
@@ -203,9 +205,14 @@ terramate generate
 #     [+] 102_terramate_generated_oncall.tf
 ```
 
+> [!NOTE] Reading the transcript
+>
+> `[+]` marks a file Terramate created, `[-]` one it removed and `[~]` one it
+> rewrote.
+
 The backend and provider files come from the shared imports covered in
 [part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) and
-[part three](/blog/posts/generating-terraform-providers-with-terramate/); the
+[part two](/blog/posts/generating-terraform-providers-with-terramate/); the
 `100` series is the team’s own. Inside `100`, the JSON array has become one
 module instantiation per element, keyed by type:
 
@@ -278,9 +285,9 @@ generation, so the pull request contains the descriptor plus every file derived
 from it. A reviewer reads the JSON, and the HCL beside it either matches the
 policy or the generator has a bug.
 
-The trade, counted: **37 descriptors totalling 1,009 lines of JSON** and a
-288-line generator, for **263 generated files and 7,776 lines** of Terraform
-that nobody writes or reviews.
+In the production repository this runs in, a few dozen descriptors, about a
+thousand lines of JSON in all, and a generator under three hundred lines stand
+in for several thousand lines of Terraform that nobody writes or reviews.
 
 Teardown runs the same machinery backwards. Emptying the descriptor removes
 every conditional file, which is why the schema accepts `{}`:
@@ -331,7 +338,7 @@ team is not possible without splitting the generator edit itself.
 
 A team descriptor is one instance of a general shape: a small declaration
 outside HCL, a generator that turns it into module calls, and no hand-written
-Terraform between them. All four posts so far assume the layout is already
+Terraform between them. All three posts so far assume the layout is already
 there.
 [Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/)
 covers getting to it from a flat repository, with a plan gate mechanical enough
