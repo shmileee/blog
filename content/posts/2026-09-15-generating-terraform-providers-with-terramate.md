@@ -7,32 +7,31 @@ categories:
   - terramate
 ---
 
-Every root module in a Terraform monorepo carries the same `required_providers`
-and `provider` blocks, copied from the last one. Here a stack declares only
-which providers it needs, and one generator renders the rest: the version
-constraints, the provider blocks and the credentials they read.
+In a repository of many root modules, provider configuration is the file most
+likely to be copied from the neighbouring stack: the version constraints, a
+`provider` block with its region and credentials, an alias for each extra
+account. Here a stack declares only which providers it needs, and one
+generator renders the rest.
 
 > [!NOTE] Series and versions
 >
-> Second post in a series on Terraform and Terramate, after
-> [the repository layout](/blog/posts/structuring-a-terraform-monorepo-with-terramate/)
-> these generators live in; the layout is `stacks/aws/<account>/<region>/<stack>`
-> with globals inherited downward. Credentials come from
-> [a data-only module](/blog/posts/one-terraform-module-for-provider-credentials/)
-> described in its own note. Tested with Terramate 0.17.3 and Terraform 1.15.8;
-> account names, profiles and secret paths are placeholders.
+> Second post in a series on Terraform and Terramate.
+>
+> - Layout: `stacks/aws/<account>/<region>/<stack>`, with globals inherited
+>   downward, from
+>   [the first post](/blog/posts/structuring-a-terraform-monorepo-with-terramate/).
+> - Credentials: [a data-only module](/blog/posts/one-terraform-module-for-provider-credentials/),
+>   described in its own note.
+> - Versions: Terramate 0.17.3 and Terraform 1.15.8; account names, profiles
+>   and secret paths are placeholders.
 
 ## The provider boilerplate problem
 
-A monorepo of Terraform root modules repeats the same three things in every
-stack: a `required_providers` block, one `provider` block per provider with the
-region and credentials filled in, and an `alias` variant of it for each account
-the stack reaches into. None of it describes infrastructure. All of it has to
-be right, and it is copy-pasted.
-
-The cost shows up on every change that crosses stacks. Moving the AWS provider
-from `~> 5.0` to `~> 6.0` is one edit per root module, and a stack that was
-copied before the change keeps the old constraint until somebody notices.
+None of that configuration describes infrastructure, and all of it has to be
+right. The cost shows up on every change that crosses stacks: moving the AWS
+provider from `~> 5.0` to `~> 6.0` is one edit per root module, and a stack
+that was copied before the change keeps the old constraint until somebody
+notices.
 
 The obvious fixes do not hold. Provider configuration belongs to the root
 module: a reusable module may declare `required_providers`, but a module that
@@ -103,11 +102,94 @@ globals "terraform" "providers" "aws.shared-services" {
 
 The `enabled` flag is what makes this composable: a provider declared high in
 the tree can be switched off for one subtree without deleting the declaration.
+Three files, three levels, one map:
+
+<figure class="concept-diagram wide" data-concept-diagram>
+  <div class="diagram-exhibit" data-exhibit>
+    <svg viewBox="0 0 640 232" role="img" aria-label="Three files at three levels of the tree. account.tm.hcl supplies aws_config_profile and account_id; below it, region.tm.hcl supplies region_name and declares the aws provider; below that, acm/stack.tm.hcl declares the aws.shared-services alias. Arrows from the region and stack files lead into one map, global.terraform.providers as the acm stack sees it, holding the keys aws and aws.shared-services.">
+      <defs>
+        <marker id="prov-arrow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--color-border)" />
+        </marker>
+      </defs>
+      <rect x="8" y="8" width="268" height="52" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="20" y="29" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">acme-development/account.tm.hcl</text>
+      <text x="20" y="47" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">aws_config_profile, account_id</text>
+      <path d="M18 60 V116 H26" stroke="var(--color-border)" fill="none" />
+      <rect x="28" y="90" width="248" height="52" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="40" y="111" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">eu-west-1/region.tm.hcl</text>
+      <text x="40" y="129" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">region_name · declares aws</text>
+      <path d="M38 142 V198 H46" stroke="var(--color-border)" fill="none" />
+      <rect x="48" y="172" width="228" height="52" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="60" y="193" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">acm/stack.tm.hcl</text>
+      <text x="60" y="211" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">declares aws.shared-services</text>
+      <path d="M276 116 H 384" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-a)" />
+      <path d="M276 198 C 330 198, 330 157, 384 157" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-a)" />
+      <rect x="372" y="44" width="260" height="144" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="388" y="68" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">global.terraform.providers</text>
+      <text x="388" y="85" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">as the acm stack sees it</text>
+      <rect x="388" y="100" width="228" height="30" rx="4" fill="var(--color-accent-surface)" stroke="var(--color-accent-border)" />
+      <text x="402" y="120" font-family="var(--font-mono)" font-size="12" fill="var(--color-accent)">aws</text>
+      <rect x="388" y="142" width="228" height="30" rx="4" fill="var(--color-accent-surface)" stroke="var(--color-accent-border)" />
+      <text x="402" y="162" font-family="var(--font-mono)" font-size="12" fill="var(--color-accent)">aws.shared-services</text>
+    </svg>
+  </div>
+  <figcaption class="exhibit-caption">Each level declares what it knows; a stack sees the union of everything above it.</figcaption>
+</figure>
 
 ## Generating the provider blocks
 
 The generator is a single `generate_hcl` block in `stacks/imports`, imported by
-the root of each subtree. Terraform allows
+the root of each subtree. It has two inputs, the map above and a map of
+credential references covered in the next section, and it renders five kinds
+of block from them:
+
+<figure class="concept-diagram wide" data-concept-diagram>
+  <div class="diagram-exhibit" data-exhibit>
+    <svg viewBox="0 0 640 292" role="img" aria-label="Two inputs, the map global.terraform.providers with a key per provider or alias, and let.credentials with references kept as strings, enter one generate_hcl block. It emits five kinds of block: required_providers from the keys without a dot; a provider block per such key with the config from its declaration; an aliased provider block per key with a dot; a module block, providers_credentials, for the providers that need a token; and provider blocks such as pagerduty whose token comes from that module.">
+      <defs>
+        <marker id="prov-arrow-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--color-border)" />
+        </marker>
+      </defs>
+      <rect x="8" y="36" width="212" height="56" rx="6" fill="var(--color-accent-surface)" stroke="var(--color-accent-border)" />
+      <text x="20" y="58" font-family="var(--font-mono)" font-size="12" fill="var(--color-accent)">global.terraform.providers</text>
+      <text x="20" y="76" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">a key per provider or alias</text>
+      <rect x="8" y="196" width="212" height="56" rx="6" fill="var(--color-accent-surface)" stroke="var(--color-accent-border)" />
+      <text x="20" y="218" font-family="var(--font-mono)" font-size="12" fill="var(--color-accent)">let.credentials</text>
+      <text x="20" y="236" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">references, as strings</text>
+      <path d="M220 64 H 240" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-b)" />
+      <path d="M220 224 H 240" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-b)" />
+      <rect x="242" y="8" width="100" height="268" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="292" y="138" text-anchor="middle" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">generate_hcl</text>
+      <text x="292" y="156" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">tm_dynamic</text>
+      <path d="M342 30 H 364" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-b)" />
+      <path d="M342 86 H 364" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-b)" />
+      <path d="M342 142 H 364" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-b)" />
+      <path d="M342 198 H 364" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-b)" />
+      <path d="M342 254 H 364" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-b)" />
+      <rect x="366" y="8" width="250" height="44" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="378" y="27" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">required_providers</text>
+      <text x="378" y="43" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">keys without a dot</text>
+      <rect x="366" y="64" width="250" height="44" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="378" y="83" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">provider "aws"</text>
+      <text x="378" y="99" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">config from the declaration</text>
+      <rect x="366" y="120" width="250" height="44" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="378" y="139" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">provider "aws" { alias }</text>
+      <text x="378" y="155" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">keys with a dot, one block each</text>
+      <rect x="366" y="176" width="250" height="44" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="378" y="195" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">module "providers_credentials"</text>
+      <text x="378" y="211" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">providers that need a token</text>
+      <path d="M616 210 C 636 210, 636 246, 618 246" stroke="var(--color-border)" fill="none" marker-end="url(#prov-arrow-b)" />
+      <rect x="366" y="232" width="250" height="44" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="378" y="251" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">provider "pagerduty"</text>
+      <text x="378" y="267" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">token from the module above</text>
+    </svg>
+  </div>
+  <figcaption class="exhibit-caption">One generator, two inputs, five kinds of output; the module block’s outputs feed the provider blocks that need a token.</figcaption>
+</figure>
+
+Terraform allows
 [one version constraint per provider](https://developer.hashicorp.com/terraform/language/providers/requirements)
 across the whole configuration, so an alias must produce a `provider` block and
 no `required_providers` entry. Keeping the alias in the key,
@@ -270,6 +352,7 @@ when that intersection is not empty:
 
 ```hcl
 lets {
+  # path from the stack back up to the repository root, e.g. ../../..
   modules = "${terramate.stack.path.to_root}/modules"
 
   credential_providers = tm_setintersection(
@@ -376,8 +459,7 @@ the alias shares the constraint emitted for the base provider.
 
 Every credential reference is a string until `tm_hcl_expression` pastes it
 into the output, so `terramate generate` will happily render a reference to an
-output that does not exist. The error surfaces at `terraform init` or
-`terraform validate`, one step later than the mistake.
+output that does not exist.
 
 Attributes come from the declaration, but blocks do not. A provider whose
 credentials live in a nested block, as GitHub’s `app_auth` does, needs its own
@@ -386,9 +468,10 @@ generator edit, not just a global.
 
 ## What’s next?
 
-Generating the code a stack repeats is one use of `generate_hcl`. The other is
-generating code a stack does not have at all, from a declaration that is not
-HCL:
+Everything in this series so far is for people who write Terraform. The next
+post turns the same generator machinery towards people who do not:
 [Generating Terraform for teams from one JSON file](/blog/posts/generating-terraform-for-teams-from-one-json-file/)
-turns a `team.json` descriptor into a team’s entire set of module calls with the
-same mechanism.
+lets a team describe its Slack channel, GitHub teams and on-call rotation in a
+`team.json`, and the monorepo produces the Terraform. It is the point where an
+infrastructure monorepo starts paying off for developers, not only for the
+platform team.

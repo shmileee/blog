@@ -1,60 +1,65 @@
 ---
 title: Generating Terraform for teams from one JSON file
-description: A JSON descriptor per team, parsed by Terramate, generates every Terraform module that team needs.
+description: Developers describe their team’s Slack channel, GitHub teams and on-call rotation in one JSON file, and everything else is generated.
 date: 2026-09-18 09:00:00
 categories:
   - terraform
   - terramate
 ---
 
-Adding a team is a directory, a JSON file and a pull request. Nobody writes
-Terraform for it and nobody reviews Terraform copied from another team: the
-descriptor says what the team has, and a generator turns that into module
-calls.
+Adding a team is a directory, a JSON file and a pull request. The file says
+what the team has, a Slack channel, GitHub teams, an on-call rotation, and a
+generator writes the Terraform for it; nobody copies it from the team next
+door.
 
 > [!NOTE] Series and versions
 >
 > Third post in a series on Terraform and Terramate, after
 > [Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/).
-> Transcripts come from a two-team scratch repository with Terramate 0.17.3,
-> Terraform 1.15.8 and
+> Terramate 0.17.3, Terraform 1.15.8 and
 > [check-jsonschema](https://github.com/python-jsonschema/check-jsonschema) 0.38;
-> platform names are generic.
+> team names are placeholders.
 
 ## Why a team is infrastructure
 
-A team exists in more places than the org chart. It is a GitHub team with
-repository permissions, a Slack channel, an on-call schedule with an escalation
-policy, and the links between them: the escalation policy points at the
-channel, the channel topic names the team. Each of those lives in a different
-system with its own admin console, and a team assembled through the consoles
-is exactly as consistent as the person who clicked through them that day.
+A team exists in more places than the org chart: a GitHub team with repository
+permissions, a Slack channel, an on-call schedule with an escalation policy,
+and the links between them. Each lives in a different system with its own admin
+console, and a team assembled by clicking through them is as consistent as the
+person who did the clicking.
 
-Declaring teams as code gives them what infrastructure already has. One
-declaration produces the same footprint in every system; every change is a
-reviewed pull request with a history behind it; a channel renamed by hand shows
-up as drift in the next plan; and removing a team is the reverse of creating
-one rather than a search through three consoles. The policy, which platforms a
-team gets and how they are named and connected, is written once, and every
-team gets the same one.
-
-Done by hand, a new team is a ticket with a checklist, and the checklist rots.
-Done by copying another team’s stack, the usual fix in a Terraform monorepo, it
-is a directory of near-identical HCL per team, with the differences buried in
-files that are 95% the same and the platform team in the path of every change,
-down to a renamed Slack channel. What a team actually has to say is small: which
-GitHub teams, which channel, which time zones the rotation covers. Everything
-else is policy, and the descriptor makes that split explicit, with Terramate’s
-[code generation](https://terramate.io/docs/cli/code-generation/) supplying the
-policy half.
+Declaring teams as code gives them what infrastructure already has: one
+declaration produces the same footprint in every system, every change is a
+reviewed pull request, a channel renamed by hand shows up as drift in the next
+plan, and removing a team is the reverse of creating one. What a team has to
+say about itself is small, which GitHub teams, which channel, which hours the
+rotation covers. Everything else is policy, written once for every team, and
+Terramate’s [code generation](https://terramate.io/docs/cli/code-generation/)
+supplies it.
 
 ## The team descriptor
 
-Teams live in their own subtree, `stacks/teams/<team>`, beside the
-account-and-region hierarchy the rest of the repository uses rather than inside
-it, because a team is not a thing that belongs to one AWS account. The team’s
-directory name is its identity, and the only other required file is the
-descriptor:
+In [the layout from the first post](/blog/posts/structuring-a-terraform-monorepo-with-terramate/),
+a stack is a directory under `stacks/` marked by a `stack.tm.hcl` file, and it
+inherits globals from the directories above it. Teams get a subtree of their
+own, `stacks/teams/<team>`, beside the account-and-region hierarchy rather than
+inside it, because a team does not belong to one AWS account:
+
+```text
+stacks/teams/
+├── teams.tm.hcl              parses team.json, holds the generators
+├── team.schema.json          what a descriptor may contain
+├── team-platform/            one stack per team
+│   ├── stack.tm.hcl          the marker, from terramate create
+│   └── team.json             the descriptor, hand written
+├── team-payments/
+├── team-search/
+├── team-mobile/
+└── team-data/
+```
+
+The directory name is the team’s identity, and the descriptor is the only file
+a person writes:
 
 ```json title="stacks/teams/team-platform/team.json"
 {
@@ -86,49 +91,34 @@ platforms and the values are the two or three facts each platform needs; every
 default lives in the generator.
 
 A [JSON Schema](https://json-schema.org/), checked in pre-commit and in
-continuous integration, rejects a malformed descriptor. Its outer shape is
-unusual:
+continuous integration, rejects a malformed descriptor. The three platform
+definitions are the long part of the file and are left out here; what matters
+is `additionalProperties` closed at every level, so a misspelled key is an
+error rather than a silently ignored one:
 
 ```json title="stacks/teams/team.schema.json"
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "oneOf": [
-    {
-      "type": "object",
-      "properties": {},
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["team_name_readable"],
-      "properties": {
-        "team_name_readable": { "type": "string" },
-        "github": { "type": "object" },
-        "slack": { "type": "object" },
-        "oncall": { "type": "object" }
-      }
-    }
-  ]
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["team_name_readable"],
+  "properties": {
+    "team_name_readable": { "type": "string" },
+    "github": { "$ref": "#/definitions/github" },
+    "slack": { "$ref": "#/definitions/slack" },
+    "oncall": { "$ref": "#/definitions/oncall" }
+  }
 }
 ```
 
-The platform objects are spelled out in full in the real file; what matters here
-is the shape around them. The first alternative accepts `{}` and nothing else,
-which exists so a team can be torn down by emptying its descriptor. The second
-is the actual schema, with `additionalProperties` closed so a misspelled key is
-an error rather than a silently ignored one. Misspell `type` inside
-`github.teams` and the check fails:
+Misspell `type` inside `github.teams` and the check fails:
 
 ```text
 check-jsonschema --schemafile stacks/teams/team.schema.json \
   stacks/teams/*/team.json
 # Schema validation errors were encountered.
-#   stacks/teams/team-platform/team.json::$:
-#     ... is not valid under any of the given schemas
-#   Best Match:
-#     $: Additional properties are not allowed ('github', 'oncall',
-#        'slack', 'team_name_readable' were unexpected)
+#   stacks/teams/team-platform/team.json::$.github.teams[1]:
+#     'type' is a required property
 ```
 
 ## Parsing it with Terramate
@@ -138,9 +128,7 @@ directory below it. Two globals do the parsing:
 
 ```hcl title="stacks/teams/teams.tm.hcl"
 globals {
-  team_name             = terramate.stack.path.basename
-  team_name_underscores = tm_replace(global.team_name, "-", "_")
-
+  team_name   = terramate.stack.path.basename
   team_config = tm_jsondecode(tm_file("team.json"))
 }
 ```
@@ -148,16 +136,15 @@ globals {
 Globals are evaluated per stack, so this one file yields a different
 `team_config` in every team directory, read from that directory’s own
 descriptor. The directory name doubles as the team’s name, which is why the
-descriptor never repeats it; the underscore variant is for platforms that
-reject hyphens.
+descriptor never repeats it.
 
 ## One generated file per platform
 
-Each platform gets its own `generate_hcl` block, guarded by whether the
-descriptor mentions it at all. As in the provider generator, functions
-prefixed `tm_` are Terraform’s, run at generation time:
+Each platform gets its own `generate_hcl` block in the same file, guarded by
+whether the descriptor mentions it at all. As in the provider generator,
+functions prefixed `tm_` are Terraform’s, run at generation time:
 
-```hcl
+```hcl title="stacks/teams/teams.tm.hcl"
 generate_hcl "100_terramate_generated_github_teams.tf" {
   condition = tm_can(global.team_config.github)
 
@@ -165,20 +152,19 @@ generate_hcl "100_terramate_generated_github_teams.tf" {
     github_teams = {
       for team in tm_try(global.team_config.github.teams, []) :
       "github_team_${team.type}" => {
+        # path from the stack back up to the repository root
         source = "${terramate.stack.path.to_root}/modules/github-team"
 
-        create           = tm_try(team.create, true)
         team_name        = global.team_name
         team_type        = team.type
         team_description = tm_try(team.description, "Managed with Terraform")
-        parent_team      = tm_try(team.parent_team, null)
       }
     }
   }
 
   content {
     tm_dynamic "module" {
-      for_each   = let.github_teams_without_nulls
+      for_each   = let.github_teams
       iterator   = team
       labels     = [team.key]
       attributes = team.value
@@ -187,9 +173,50 @@ generate_hcl "100_terramate_generated_github_teams.tf" {
 }
 ```
 
-A block whose condition is false produces no file, so the generated files mirror
-the descriptor’s top-level keys. Two teams, one with three platforms and one
-with an empty descriptor, generate this:
+A block whose condition is false produces no file, so a team’s generated files
+mirror its descriptor’s top-level keys:
+
+<figure class="concept-diagram wide" data-concept-diagram>
+  <div class="diagram-exhibit" data-exhibit>
+    <svg viewBox="0 0 640 240" role="img" aria-label="A team.json descriptor enters teams.tm.hcl, which holds three generate_hcl blocks, each guarded by whether the descriptor mentions github, slack or oncall. Each block that fires writes one file: 100_terramate_generated_github_teams.tf with one module per GitHub team, 101_terramate_generated_slack.tf with one Slack module, 102_terramate_generated_oncall.tf with one module per schedule.">
+      <defs>
+        <marker id="team-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--color-border)" />
+        </marker>
+      </defs>
+      <rect x="8" y="120" width="128" height="56" rx="6" fill="var(--color-accent-surface)" stroke="var(--color-accent-border)" />
+      <text x="20" y="142" font-family="var(--font-mono)" font-size="12" fill="var(--color-accent)">team.json</text>
+      <text x="20" y="160" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">the descriptor</text>
+      <path d="M136 148 H 158" stroke="var(--color-border)" fill="none" marker-end="url(#team-arrow)" />
+      <rect x="160" y="8" width="136" height="224" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="228" y="30" text-anchor="middle" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">teams.tm.hcl</text>
+      <text x="228" y="46" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">generate_hcl × 3</text>
+      <rect x="174" y="72" width="108" height="28" rx="4" fill="var(--color-accent-surface)" stroke="var(--color-accent-border)" />
+      <text x="228" y="91" text-anchor="middle" font-family="var(--font-mono)" font-size="12" fill="var(--color-accent)">if github</text>
+      <rect x="174" y="132" width="108" height="28" rx="4" fill="var(--color-accent-surface)" stroke="var(--color-accent-border)" />
+      <text x="228" y="151" text-anchor="middle" font-family="var(--font-mono)" font-size="12" fill="var(--color-accent)">if slack</text>
+      <rect x="174" y="192" width="108" height="28" rx="4" fill="var(--color-accent-surface)" stroke="var(--color-accent-border)" />
+      <text x="228" y="211" text-anchor="middle" font-family="var(--font-mono)" font-size="12" fill="var(--color-accent)">if oncall</text>
+      <path d="M282 86 H 318" stroke="var(--color-border)" fill="none" marker-end="url(#team-arrow)" />
+      <path d="M282 146 H 318" stroke="var(--color-border)" fill="none" marker-end="url(#team-arrow)" />
+      <path d="M282 206 H 318" stroke="var(--color-border)" fill="none" marker-end="url(#team-arrow)" />
+      <rect x="320" y="64" width="312" height="44" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="332" y="83" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">100_terramate_generated_github_teams.tf</text>
+      <text x="332" y="99" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">one module per github team</text>
+      <rect x="320" y="124" width="312" height="44" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="332" y="143" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">101_terramate_generated_slack.tf</text>
+      <text x="332" y="159" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">one slack module</text>
+      <rect x="320" y="184" width="312" height="44" rx="6" fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text x="332" y="203" font-family="var(--font-mono)" font-size="12" fill="var(--color-text)">102_terramate_generated_oncall.tf</text>
+      <text x="332" y="219" font-family="var(--font-mono)" font-size="11" fill="var(--color-text-muted)">one module per schedule</text>
+    </svg>
+  </div>
+  <figcaption class="exhibit-caption">One descriptor in, one Terraform file out per platform it names; a platform the descriptor leaves out produces no file.</figcaption>
+</figure>
+
+`team-platform` declares three platforms and `team-payments` none yet, so one
+gets three files and the other only the two every stack gets from the shared
+imports:
 
 ```text
 terramate generate
@@ -203,81 +230,42 @@ terramate generate
 #     [+] 100_terramate_generated_github_teams.tf
 #     [+] 101_terramate_generated_slack.tf
 #     [+] 102_terramate_generated_oncall.tf
+#
+# ... team-search, team-mobile, team-data ...
 ```
 
-> [!NOTE] Reading the transcript
->
-> `[+]` marks a file Terramate created, `[-]` one it removed and `[~]` one it
-> rewrote.
-
-The backend and provider files come from the shared imports covered in
+Files `000` and `001` come from the shared imports in
 [part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) and
-[part two](/blog/posts/generating-terraform-providers-with-terramate/); the
-`100` series is the team’s own. Inside `100`, the JSON array has become one
-module instantiation per element, keyed by type:
+[part two](/blog/posts/generating-terraform-providers-with-terramate/). The
+`100` file is the team’s own: one module call per entry in the descriptor’s
+`github.teams` array, keyed by type:
 
 ```hcl title="stacks/teams/team-platform/100_terramate_generated_github_teams.tf"
+// TERRAMATE: GENERATED AUTOMATICALLY DO NOT EDIT
+
 module "github_team_default" {
-  create           = true
   source           = "../../../modules/github-team"
   team_description = "Managed with Terraform"
   team_name        = "team-platform"
   team_type        = "default"
 }
-# ... github_team_frontend, with the description from the descriptor ...
-```
-
-Two details in that generator matter. The first is the comprehension the
-`content` block iterates, `github_teams_without_nulls`, which strips attributes
-whose value came out `null`:
-
-```hcl
-github_teams_without_nulls = {
-  for name, attributes in let.github_teams :
-  name => {
-    for k, v in attributes :
-    k => v
-    if v != null
-  }
+module "github_team_frontend" {
+  source           = "../../../modules/github-team"
+  team_description = "Frontend engineers"
+  team_name        = "team-platform"
+  team_type        = "frontend"
 }
 ```
-
-Without it, a descriptor that omits `parent_team` generates `parent_team = null`
-rather than omitting the attribute, and to Terraform those are not the same
-thing. Measured on 1.15.8: passing `null` to an ordinary input variable leaves
-the variable null and the module’s default unused. Omitting the attribute
-applies the default. A variable declared `nullable = false` converts the null
-back into its default, which is why some modules survive this and others do
-not. Generating nothing is the only form that means “use the default” in all
-three cases.
-
-The second is that generated files may reference each other. The Slack
-generator emits a `module "slack"` whose `name` output is the channel; the
-on-call generator sets `escalation_channel` from it, and has to decide at
-generation time whether that module will exist:
-
-```hcl
-escalation_channel = tm_ternary(
-  tm_can(global.team_config.slack)
-  && tm_try(global.team_config.slack.create, true),
-  module.slack.name,
-  null
-)
-```
-
-`tm_ternary`, `tm_can` and `tm_try` are resolved while generating;
-`module.slack.name` is not a Terramate expression at all and is emitted verbatim
-for Terraform to resolve at plan time.
 
 ## Onboarding and teardown
 
 Adding a team is four steps, and only one of them is a decision:
 
 ```bash
-mkdir stacks/teams/team-platform
-# write stacks/teams/team-platform/team.json
-terramate create stacks/teams/team-platform
-git add stacks/teams/team-platform && git commit
+mkdir stacks/teams/team-search
+# write stacks/teams/team-search/team.json
+terramate create stacks/teams/team-search
+git add stacks/teams/team-search && git commit
 ```
 
 `terramate create` writes the `stack.tm.hcl` marker with its identifier and runs
@@ -289,8 +277,26 @@ In the production repository this runs in, a few dozen descriptors, about a
 thousand lines of JSON in all, and a generator under three hundred lines stand
 in for several thousand lines of Terraform that nobody writes or reviews.
 
-Teardown runs the same machinery backwards. Emptying the descriptor removes
-every conditional file, which is why the schema accepts `{}`:
+Teardown runs the same machinery backwards. The real schema wraps the object
+shown earlier in a `oneOf` whose other branch accepts an empty object and
+nothing else:
+
+```json title="stacks/teams/team.schema.json"
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    { "$ref": "#/definitions/team" }
+  ]
+}
+```
+
+So a team is torn down by emptying its descriptor, which removes every
+conditional file:
 
 ```text
 echo '{}' > stacks/teams/team-platform/team.json
@@ -306,40 +312,30 @@ of exactly those resources, reviewable as a diff before anyone runs it.
 
 ## Limitations
 
-Deleting a key is a destroy. That is correct, and it is also one keystroke away
-from removing a channel a team is using. The schema and the review are the only
-guardrails: nothing in the generation step distinguishes “we no longer want
-this” from “I meant to edit the line below”.
+Deleting a key is a destroy. That is correct, and it is also one keystroke from
+removing a channel a team is using; the schema and the review are the only
+guardrails.
 
-The descriptor can only express what the generator already understands. Adding a
+The descriptor can only say what the generator already understands. A new
 platform, or a field the modules do not take yet, is a change to `teams.tm.hcl`
-and to a module, which is platform-team work; the self-service surface ends at
-the schema.
+and to a module, which is platform-team work; self-service ends at the schema.
 
-The teardown affordance costs error quality. A `oneOf` makes the validator
-report the branch it judged closest, and for a descriptor with a typo in it that
-branch is the empty-object one, so the message blames every top-level key
-instead of the misspelled one. Validated against the second alternative alone,
-the same file reports `$.github.teams[1]: 'type' is a required property`.
+Accepting `{}` costs error quality. A `oneOf` makes the validator report the
+branch it judged closest, and for a descriptor with one typo that is the
+empty-object branch, so the message blames every top-level key instead of the
+misspelled one. Moving the empty case out of the schema and into the pre-commit
+hook fixes that.
 
-Teams read the first message. Either live with it, or move the empty case out of
-the schema and into the pre-commit hook.
+JSON has no comments, so the reason behind an unusual value lives in the commit
+message. The schema’s `description` fields are the only documentation next to
+the file.
 
-JSON has no comments, so the reason a team disabled a rotation lives in the
-commit message rather than next to the flag. A schema with descriptions helps a
-reader more than it first appears, because it is the only documentation adjacent
-to the file.
-
-Every team’s generated files are rewritten when the generator changes, so a
-policy change lands as one commit touching every team directory. Splitting it by
-team is not possible without splitting the generator edit itself.
+A generator change rewrites every team’s files, so a policy change lands as one
+commit touching every team directory.
 
 ## What’s next?
 
-A team descriptor is one instance of a general shape: a small declaration
-outside HCL, a generator that turns it into module calls, and no hand-written
-Terraform between them. All three posts so far assume the layout is already
-there.
+Everything so far assumes the layout already exists.
 [Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/)
-covers getting to it from a flat repository, with a plan gate mechanical enough
-that an agent can drive the migration behind it.
+is about getting there from a flat repository: one stack at a time, behind a
+plan gate strict enough that an agent can do the moving.

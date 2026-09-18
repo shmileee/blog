@@ -1,6 +1,6 @@
 ---
 title: One Terraform module for provider credentials
-description: One module maps provider names to secret paths; no Terraform stack knows where credentials live.
+description: Stacks name the credentials they need; one data-only module knows where each secret lives and reads it for them.
 date: 2026-09-11 09:00:00
 categories:
   - terraform
@@ -246,12 +246,23 @@ equally to the data source it replaces. What centralising the reads
 adds is how easy it becomes to pull more secrets into a stack than that stack’s
 state should hold.
 
+Secret values are read at plan time and baked into the plan, so rotating a
+credential requires a new plan rather than an apply of the existing one.
+
+Terraform 1.10 added a way around both. An
+[`ephemeral` block](https://developer.hashicorp.com/terraform/language/block/ephemeral)
+is read during plan and again during apply, and its value is written to neither
+the plan nor the state; the AWS provider ships
+[`aws_secretsmanager_secret_version`](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/ephemeral-resources/secretsmanager_secret_version)
+in that form. The module can switch to it with two edits, `ephemeral` in place
+of `data` and `ephemeral = true` on the output, on one condition: every
+consumer of the output has to be a provider configuration, a write-only
+argument or another ephemeral value. Provider credentials are exactly that
+case, so this is the change to try first.
+
 The identity running a stack needs read access to every secret its requested
 names resolve to. The default is to read the whole registry, so a module call
 with no `terraform_providers` asks for all of them; pass the list.
-
-Secret values are read at plan time and baked into the plan, so rotating a
-credential requires a new plan rather than an apply of the existing one.
 
 The registry is a local in one module, which means adding a name is a change to
 a shared file that every stack consumes. That is the point of the pattern, and
