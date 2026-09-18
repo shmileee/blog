@@ -5,7 +5,7 @@ date: 2026-03-04 09:00:00
 categories:
   - opencode
   - tmux
-  - developer-tools
+  - devex
 ---
 
 I keep several [OpenCode](https://opencode.ai) sessions running, one per

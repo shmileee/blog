@@ -4,7 +4,7 @@ description: Two kinds of pre-commit hook, the ones that fix and the ones that o
 date: 2024-12-08 12:00:00
 categories:
   - pre-commit
-  - developer-tools
+  - devex
 ---
 
 Markdown accumulates small inconsistencies, trailing spaces, doubled blank

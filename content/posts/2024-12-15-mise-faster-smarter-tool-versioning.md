@@ -3,7 +3,7 @@ title: Pinning tool versions with mise, and what not to pin
 description: One file pins Terraform for everyone who clones the repository; the version manager matters less than the decision of which tools deserve a pin at all.
 date: 2024-12-15 10:00:00
 categories:
-  - developer-tools
+  - devex
   - mise
 ---
 
