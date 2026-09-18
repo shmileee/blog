@@ -1,38 +1,35 @@
 ---
 title: Migrating Terraform stacks to Terramate with an agent
-description: A per-stack Terraform migration behind an empty-plan gate, driven by an agent through Atlantis.
+description: One stack at a time, move the code, copy the state, and let an empty plan prove nothing changed. Boring enough to hand to an agent.
 date: 2026-09-22 09:00:00
 categories:
   - terraform
   - terramate
 ---
 
-One stack at a time, nothing destroyed, nothing moved: the code is moved, the
-state object is copied, and a plan with no changes is the proof. The procedure
-is boring on purpose, boring enough to hand to an agent.
+The layout in this series is a target. Getting an existing repository there is
+one stack at a time: move the code, copy the state object, and prove with a
+plan that nothing changed. Every step is mechanical and the proof is one line
+of output, which is why the last section hands the procedure to an agent.
 
 > [!NOTE] Series and versions
 >
 > Fourth post in a series on Terraform and Terramate, after
 > [Generating Terraform for teams from one JSON file](/blog/posts/generating-terraform-for-teams-from-one-json-file/).
-> Versions are Terramate 0.17.3 with Terraform 1.15.8. This is the procedure
-> used on a private monorepo where most of the legacy stacks have already moved
-> this way; buckets, keys and account names are placeholders.
+> Terramate 0.17.3 and Terraform 1.15.8. The procedure comes from a private
+> monorepo where most of the legacy stacks have moved this way; buckets, keys
+> and account names are placeholders.
 
-## One stack at a time, in the right order
+## Why one stack at a time
 
-The layout being replaced is the usual one: `app/<stack>/<env>/`, each directory
-holding its own `main.tf`, its own `terraform.tf` with a backend block, and a
-state key derived from its own path.
+The legacy layout is `app/<stack>/<env>/`, each directory with its own backend
+block and a state key derived from its own path. That key is what ties a
+directory to the resources it manages, so converting the whole tree at once
+has every stack planning against a key that does not exist yet, and no
+rollback smaller than one large revert. Per stack, a failed migration is one
+pull request to close.
 
-Converting the whole tree at once is unsafe because the state key moves for
-every stack simultaneously. A backend key is what ties a directory to the
-resources it manages, so a repository-wide move has every stack planning against
-a key that does not exist yet. There is no partial rollback from that, only one
-large revert.
-
-Per-stack migration avoids it, but the stacks are not equally safe to move.
-Classify before starting:
+Not every stack is equally safe to move first:
 
 | Class | Signals | Action |
 | --- | --- | --- |
@@ -40,14 +37,11 @@ Classify before starting:
 | Review | several provider aliases, git-ref module sources, provider major differs from the generated constraint | migrate with care |
 | Hold | reads or is read via `terraform_remote_state`, owns shared networking or DNS, inline secrets in `*.tf` | migrate later, as a group |
 
-The `terraform_remote_state` rule exists because a producer and its consumers
-have to move together, or the producer first: copying a producer’s state to a
-new key while a consumer still reads the old one leaves the consumer reading a
-snapshot that stops being updated.
+A `terraform_remote_state` producer and its consumers move together, or the
+producer first; otherwise the consumer keeps reading a snapshot that is no
+longer updated.
 
-## Copy the state, never move it
-
-The mechanical part is short, and only one step of it touches AWS directly.
+## Move the code, copy the state
 
 <figure class="concept-diagram" data-concept-diagram>
   <div class="diagram-exhibit" data-exhibit role="img"
@@ -73,14 +67,13 @@ git mv app/<stack-name>/<env>/main.tf \
   stacks/aws/<account-folder>/<region>/<stack-name>/main.tf
 ```
 
-Then the moved file is edited down. The root `provider "aws"` block comes out,
-because the generator now emits it, and the backend block comes out for the same
-reason. Every relative module source gains the two extra `../` that the deeper
-path costs. What stays is the module invocations and any stack-local
+The moved `main.tf` loses its `provider` and backend blocks, which the
+generators now emit, and every relative module source gains the `../` segments
+the deeper path costs. What stays is the module calls and any stack-local
 resources.
 
-The state copy is a plain S3 object copy between the old key and the
-Terramate-generated one, guarded on both sides:
+The state copy is a plain S3 object copy between the old key and the generated
+one, guarded on both sides:
 
 ```bash
 # 1. the legacy object exists
@@ -96,88 +89,64 @@ aws s3api copy-object --profile <profile> --bucket <new-bucket> \
   --copy-source <legacy-bucket>/<legacy-key> --key <new-key>
 ```
 
-Copying rather than moving is what makes the migration reversible. The legacy
-object stays byte-for-byte intact, so reverting the pull request restores the
-legacy directory and its project resumes planning against its original key, with
-the copy left behind as an orphan. Comparing `ETag` and `ContentLength` on both
-objects afterwards is a cheap integrity check; state files are usually a single
-part, so a matching `ETag` is a strong signal.
+Copying rather than moving keeps the migration reversible: revert the pull
+request and the legacy directory resumes planning against its untouched key,
+with the copy left behind as an orphan. Comparing `ETag` and `ContentLength`
+on both objects is a cheap check that the copy is complete.
 
 ## The plan gate
 
-A migrated stack should manage exactly the resources it managed before, and the
-plan on the pull request is where that is proven. With the state copied
-byte-for-byte and the code moved rather than rewritten, Terraform refreshes
-every resource in the copied state, compares it with the moved configuration,
-and finds nothing to do.
-
-That gives a gate precise enough to delegate. The migration passes on one line
-of plan output:
+With the state copied byte for byte and the code moved rather than rewritten,
+the plan on the pull request refreshes every resource in the copied state,
+compares it with the moved configuration, and should find nothing to do:
 
 ```text
 No changes. Your infrastructure matches the configuration.
 ```
 
-Zero creates, replaces, destroys or attribute updates. Anything else means
-stop, and the diagnosis order matters more than the list:
+Anything else means stop. In practice it is one of two things: the generated
+provider constraint resolves to a different major version than the legacy lock
+file, which is fixed in the declaration and never by upgrading to clear a diff;
+or a global resolved from the new path, the profile or the region, is not the
+one the legacy stack used, so the plan fails to authenticate or wants to
+recreate everything somewhere else. Rarer causes are a renamed provider alias,
+a module source off by one `../`, and path-sensitive functions such as
+`file()` or `path.root` now evaluated from a different directory. Each
+produces a plan that looks like an infrastructure change and is not.
 
-1. **Provider version drift**: the generated constraint resolves to a different
-   major than the legacy lock file. Fix the declaration, never upgrade to clear
-   a diff.
-2. **A wrong global**: the profile or region resolved from the new path is not
-   the one the legacy stack used, so the plan fails to authenticate or wants to
-   recreate everything somewhere else.
-3. **A renamed provider alias**: aliases must keep their exact old names or
-   every aliased resource plans as new.
-4. **Module source depth**: off by one `../`, or a git-ref source that now
-   resolves to newer code than the last apply.
-5. **Path-sensitive functions**: `file()`, `templatefile()`, `fileset()`,
-   `path.root` and friends compute different values from a different directory.
+The legacy directory is deleted in the same pull request, and it has to be the
+whole directory: a pipeline that discovers projects by directory will still
+find an empty one and fail to initialise it.
 
-Only the first two are common; the rest matter because each produces a plan that
-looks like a real infrastructure change and is not.
+## Handing it to an agent
 
-Deleting the legacy directory belongs in the same pull request, and it has to be
-the whole directory: continuous integration that discovers Terraform projects by
-directory will still find an empty one and fail initialising it.
+A runbook whose steps never vary is a script with prose formatting, and this
+one has the shape agents are good at: every input is in the repository, every
+step is mechanical, and success is a diff shape rather than a judgement. So it
+became a skill, a Markdown file an [OpenCode](https://opencode.ai) agent loads
+on demand, with the steps above and the rules it may not negotiate:
 
-## Handing the runbook to an agent
-
-Written down, the procedure above is a runbook, and a runbook whose steps never
-vary is a script with prose formatting. It is also close to ideal agent work:
-every input is discoverable from the repository, every step is mechanical, and
-the success criterion is a diff shape rather than a judgement.
-
-So the runbook became a skill, a Markdown file an
-[OpenCode](https://opencode.ai) agent loads on demand, which names the steps and
-the rules it may not negotiate:
-
-- **Hold by default.** A stack migrates only if the classification above
-  clears it.
-  Anything high-blast-radius or coupled is reported and left for a human.
-- **Copy state, never move it.** No `terraform state mv`, no deleting the legacy
-  object.
-- **Never apply locally.** The agent runs `terramate generate`,
-  `terraform fmt` and read-only `aws s3api` calls. Nothing else.
+- **Hold by default.** A stack migrates only if the classification clears it;
+  anything coupled or high-blast-radius is reported and left to a person.
+- **Copy state, never move it.** No `terraform state mv`, no deleting the
+  legacy object.
+- **Never apply locally.** `terramate generate`, `terraform fmt` and read-only
+  `aws s3api` calls; nothing else.
 - **Match provider versions exactly.** Never upgrade a major to clear a diff.
 - **An empty plan is the gate.** Anything else stops the run.
 - **Confirm before opening a pull request, and before every apply.**
 
-Each rule closes off a shortcut that would look locally reasonable to an agent
-halfway through a migration. The last one matters most: the agent prepares and
-waits rather than finishing, because the steps it cannot take are the steps
-that change infrastructure.
+Each rule closes off a shortcut that would look reasonable to an agent halfway
+through a migration.
 
-The tool doing that planning is [Atlantis](https://www.runatlantis.io/): it
-plans when a pull request opens and applies when someone comments on it. Two
-consequences shape the whole procedure. The state copy has to land **before**
-the pull request opens, because the plan runs immediately on open. And the
-agent can prepare the change but not apply it, so it opens the pull request,
-reads the plan, checks it against the gate, and asks. Approval comes from a
-different identity than the one that wrote the branch, which is worth keeping
-whether the author is a person or not.
-
-Applying is one comment per stack directory, in sequence:
+Plans and applies run through [Atlantis](https://www.runatlantis.io/), which
+plans when a pull request opens and applies when someone comments on it. That
+fixes two things about the procedure: the state copy lands before the pull
+request opens, and the agent prepares but never applies. It opens the pull
+request, reads the plan against the gate, and asks; approval comes from a
+different identity than the one that wrote the branch. Applying is one comment
+per stack directory, in sequence, because a single comment naming several
+directories does not work once a pull request carries more than one project:
 
 ```bash
 gh pr comment "$PR" \
@@ -185,56 +154,42 @@ gh pr comment "$PR" \
 gh pr checks "$PR" --watch
 ```
 
-A single comment listing several directories does not work, and a bare
-`atlantis apply` is unreliable once a pull request carries more than one
-project. One directory per comment, waiting for each to report success, is the
-only sequence that behaves.
-
-Running several migrations at once is where an agent pays off, and git
-worktrees make it safe:
+Running several migrations at once is where the agent pays off. One git
+worktree per stack, outside the repository so neither Terramate nor Atlantis
+scans it, each with its own branch, pull request and agent:
 
 ```bash
 git worktree add ../migrate-<stack> -b migrate/<stack>-to-terramate
 ```
 
-One worktree per stack, living outside the repository so neither Terramate nor
-Atlantis scans it, each with its own branch, pull request and agent. The paths
-each migration touches are disjoint, and the shared imports are never modified,
-so the runs do not collide.
-
-They do collide on one file. Every migration pull request edits `CODEOWNERS`,
-the file GitHub routes reviews by, to drop the rule for the legacy directory it
-deleted, so the first one to
-merge leaves the others based on a stale branch with a conflict in exactly
-that file. It is mechanical to fix, rebase and re-plan, but it is worth
-knowing before three agents report the same failure at once.
+The paths each migration touches are disjoint and the shared imports are never
+edited, so the runs collide on exactly one file: every migration edits
+`CODEOWNERS` to drop the legacy directory it deleted, and the first one to
+merge leaves the others with a conflict there. Rebase and re-plan; it is
+mechanical, and worth knowing before three agents report the same failure at
+once.
 
 ## Limitations
 
-An empty plan proves that the copied state, the moved code and what is deployed
-agree with each other. It does not prove the legacy directory has stopped being
-applied: an apply there after the copy changes infrastructure that the new
-stack will then want to revert. Freeze the legacy directory once its object is
-copied, and delete it in the migration pull request.
+An empty plan proves that the copied state, the moved code and what is
+deployed agree. It does not prove the legacy directory has stopped being
+applied; freeze it once its object is copied, and delete it in the migration
+pull request.
 
-The state copy needs credentials for the destination account, so it cannot be
-delegated to continuous integration; everything else is a pull request.
+The state copy needs credentials for the destination account, so that step
+stays on a workstation. Everything else is a pull request.
 
-The classification is advisory. It reads provider blocks, remote-state
-references and recent churn, all of which are proxies; a stack can look like a
+The classification is advisory. It reads proxies, and a stack can look like a
 clean candidate and still be the one nobody wants replanned on a Friday. The
-gate catches mistakes, the classification only orders the work.
+gate catches mistakes; the classification only orders the work.
 
-An agent driving this is fast at the mechanical part and no better than the
-runbook at the judgement part. It will happily prepare a migration for a stack
-that should have been held, which is why holding is the default and why the
-confirmation steps are not optional.
+An agent is fast at the mechanical part and no better than the runbook at the
+judgement part. That is why holding is the default and the confirmations are
+not optional.
 
 ## What’s next?
 
-A migrated repository is correct and considerably harder to read. `ls` stops
-being an answer to “what do we have”, because the answer is now spread across
-accounts and regions.
-[Listing every Terramate stack and where it runs](/blog/posts/listing-every-terramate-stack-and-where-it-runs/)
-covers getting that overview back by asking Terramate’s own packages what
-exists, rather than reading the tree.
+A migrated repository is correct and harder to read: the same stack name now
+lives in several accounts and regions, five directory levels down.
+[Building an interactive TUI for Terramate stacks](/blog/posts/building-an-interactive-tui-for-terramate-stacks/)
+is the tool I built to get the overview back.
