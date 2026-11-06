@@ -9,7 +9,7 @@ categories:
 
 After the migration, the repository knew exactly where every stack ran, and I
 no longer did. The same stack name now lives in several accounts and regions,
-five directory levels down, and finding all of them is a search rather than a
+five directory levels down. Finding all of them is a search rather than a
 directory listing. So I built a small terminal tool that lists every stack,
 shows where each one runs, and puts me in its directory.
 
@@ -52,11 +52,11 @@ right for the machine, and together they cost the person something:
 </figure>
 
 With a dozen stacks the cost is nothing. The repository this comes from has
-roughly five hundred stack directories, about two hundred distinct stack names
-among them, and its most common name exists in around twenty places at once. At
-that size “where does `foundation` run” is no longer `ls app/`; it is a `find`
-over the tree, or a mental model of it. What a person wants is the inverse of
-the tree: one row per stack name, with every place it runs underneath:
+roughly five hundred stack directories and about two hundred distinct stack
+names. Its most common name exists in around twenty places at once. At that
+size, “where does `foundation` run” is no longer `ls app/`. It is a `find`
+over the tree, or a mental model of it. What a person wants is the tree turned
+inside out: one row per stack name, with every place it runs underneath:
 
 <figure class="concept-diagram wide" data-concept-diagram>
   <div class="diagram-exhibit" data-exhibit>
@@ -90,22 +90,22 @@ the tree: one row per stack name, with every place it runs underneath:
 
 I built a small Go program for this and called it `terramate-stacks-explorer`.
 It has two faces. Run plainly, it prints a table: one row per stack, with the
-account, region and environment it runs in. Run interactively, it is a terminal
-UI over the same list, with filters, a detail pane and a way to jump into a
-stack’s directory. This section is about where the list comes from; the next
-one is about the UI.
+account, region and environment it runs in. Run interactively, it is a
+terminal UI over the same list, with filters, a detail pane and a way to jump
+into a stack’s directory. This section is about where the list comes from. The
+next one is about the UI.
 
 The difficult part is not walking directories. Account, region and environment
-are not written in a stack’s path; they are globals, declared once in
+are not written in a stack’s path. They are globals, declared once in
 `account.tm.hcl` and `region.tm.hcl` and inherited downward, and a stack can
 override any of them. The only thing that knows their final value for a given
 stack is Terramate’s own evaluation, the one code generation runs.
 
 Terramate is written in Go, and the `terramate` command is built from packages
-a Go program can import. So instead of running `terramate list` and parsing its
-output, which gives the paths but not the values, the tool imports three of
-those packages, `config`, `stack` and `globals`, and asks them directly. Three
-calls do the work:
+a Go program can import. Running `terramate list` and parsing its output would
+give the paths but not the values. So the tool imports three of those
+packages, `config`, `stack` and `globals`, and asks them directly. Three calls
+do the work:
 
 ```go title="main.go"
 // The repository, from the directory that holds terramate.tm.hcl.
@@ -124,12 +124,12 @@ for _, e := range entries {
 }
 ```
 
-Because the values come from the same evaluation code generation uses, a stack
+The values come from the same evaluation code generation uses. So a stack
 whose `environment` global says `production` while its path says otherwise
 reports `production`. A global comes back as a typed value, so `str` turns it
-into text and prints `-` for a key the stack does not define. With a header and
-aligned columns on top, that is the whole non-interactive inventory, in under a
-hundred lines:
+into text and prints `-` for a key the stack does not define. With a header
+and aligned columns on top, that is the whole non-interactive inventory, in
+under a hundred lines:
 
 ```text
 STACK                                         ACCOUNT           REGION     ENV
@@ -143,15 +143,16 @@ STACK                                         ACCOUNT           REGION     ENV
 ## The terminal UI
 
 The table answers the question once. The interactive version is for the way
-the question is actually asked, several times in a row, narrowing as it goes.
-It opens on what the inventory contains, counted: environments, regions,
-accounts. The left pane is one row per stack name with a deployment count; the
-right pane is every deployment of the selected one, grouped by environment with
-development before staging before production; the header carries the active
-filters. Fuzzy search narrows the list as you type, and selecting a deployment
-opens a shell in its directory, which turns “where does this run” into “put me
-there”. It is built with [Bubble Tea](https://github.com/charmbracelet/bubbletea),
-the usual toolkit for this in Go, over the same list the table prints.
+the question is actually asked: several times in a row, narrowing as it goes.
+It opens on a count of what the inventory contains: environments, regions,
+accounts. The left pane is one row per stack name with a deployment count. The
+right pane is every deployment of the selected one, grouped by environment,
+with development before staging before production. The header carries the
+active filters. Fuzzy search narrows the list as you type. Selecting a
+deployment opens a shell in its directory, which turns “where does this run”
+into “put me there”. It is built with [Bubble
+Tea](https://github.com/charmbracelet/bubbletea), the usual toolkit for this
+in Go, over the same list the table prints.
 
 Recorded against a mock repository of 22 deployments:
 
@@ -199,40 +200,41 @@ terramate-stacks-explorer --view deployments --env production \
 # 8 deployments
 ```
 
-`--format json` prints every field the loader resolved, account identifier,
-AWS profile and stack identifier included, for anything that wants the
-inventory as data rather than as a `find` command with conventions baked in.
+`--format json` prints every field the loader resolved, including the account
+id, AWS profile and stack id. It is for anything that wants the inventory as
+data rather than as a `find` command with conventions baked in.
 
-The tool is thin because the repository does the work, which holds on three
+The tool is thin because the repository does the work. That holds on three
 conditions. It runs from anywhere inside a Terramate project and finds the
 root by climbing to `terramate.tm.hcl`. It sees the stacks Terramate itself
-sees, `.tmskip` and all. And it expects the four globals the layout in
-[part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) names,
-`account_name`, `region_name`, `environment` and `aws_config_profile`; those
+sees, `.tmskip` and all. And it expects the four globals the layout in [part
+one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) names:
+`account_name`, `region_name`, `environment` and `aws_config_profile`. Those
 are its entire contract with the repository. A stack that omits one is not an
-error; it just shows `-`, as the `saas/github` row above does for account and
+error. It just shows `-`, as the `saas/github` row above does for account and
 region.
 
 ## Limitations
 
-Importing Terramate’s packages couples the tool to them. They are not a public
+Importing Terramate’s packages ties the tool to them. They are not a public
 API and move between releases, so the tool pins the Terramate version it was
-built against and upgrades deliberately. Shelling out to `terramate list` is
-the slower, more stable alternative for the paths, though not for the values.
+built against and upgrades on purpose, not by accident. Shelling out to
+`terramate list` is the slower, more stable alternative for the paths, though
+not for the values.
 
 Evaluating globals for every stack is real work per stack, not a directory
 walk. It is fast enough at a few hundred stacks when spread across goroutines.
 
 The inventory reports what the globals say, which is what code generation acts
-on, and neither knows what is actually deployed. A stack applied this morning
-and one last applied six months ago look identical here; the git history of
-the directory is the closest thing to an answer, and it only reports on the
-code.
+on. Neither knows what is actually deployed. A stack applied this morning and
+one last applied six months ago look identical here. The git history of the
+directory is the closest thing to an answer, and it only reports on the code.
 
 ## What’s next?
 
 Every post in this series so far assumes the declarations are right: a stack
 names its providers, a descriptor names its platforms, a global names its
 account. A later post covers what happens when one of them is wrong, and why a
-generator is the right place to refuse: `assert` blocks, and the version
-contracts they let a shared generator enforce before Terraform ever runs.
+generator is the right place to refuse. It is about `assert` blocks, and the
+version contracts they let a shared generator enforce before Terraform ever
+runs.

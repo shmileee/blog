@@ -9,11 +9,11 @@ categories:
 
 Markdown accumulates small inconsistencies: trailing spaces, doubled blank
 lines, a heading with no blank line under it. They surface in diffs and
-reviews where nobody wanted to talk about them. The
-[pre-commit framework](https://pre-commit.com/) runs formatters and linters
-on the staged files before every commit, so they never reach the diff. The
-setup is ten lines; the part worth a post is what happens on the first commit
-after adding it.
+reviews where nobody wanted to talk about them. The [pre-commit
+framework](https://pre-commit.com/) runs formatters and linters on the staged
+files before every commit, so they never reach the diff. The setup is ten
+lines. The part worth a post is what happens on the first commit after adding
+it.
 
 > [!NOTE] Versions
 >
@@ -44,14 +44,14 @@ is what makes the hooks run on `git commit`.
 
 ## Two kinds of hook
 
-A hook is a program that receives the staged file names and exits non-zero
-to block the commit. The two hooks from `pre-commit-hooks` are *fixers*: they
-rewrite the file and exit non-zero, so the commit stops and the fix is
-already in the working tree. `markdownlint`, as configured above, is a
-*checker*: it reports and leaves the file alone. The difference shows on the
-first run. Take a file with three trailing spaces after “space”, two blank
-lines in a row, a heading with no blank line under it and no newline at the
-end; the spaces and the missing newline are invisible in the listing:
+A hook is a program that receives the staged file names and exits non-zero to
+block the commit. The two hooks from `pre-commit-hooks` are *fixers*: they
+rewrite the file and exit non-zero, so the commit stops and the fix is already
+in the working tree. `markdownlint`, as configured above, is a *checker*: it
+reports and leaves the file alone. The difference shows on the first run. Take
+a file with four problems. It has three trailing spaces after “space”, two
+blank lines in a row, a heading with no blank line under it, and no newline at
+the end. The spaces and the missing newline are invisible in the listing:
 
 ```markdown title="docs/README.md"
 # Notes
@@ -91,11 +91,10 @@ pre-commit run --all-files
 ```
 
 All three failed, for two different reasons. The fixers failed *because they
-changed the file*: `git status` now shows `AM docs/README.md`, the staged
-copy still carrying the whitespace and the working copy without it. Staging
-again and re-running is the whole remedy for a fixer. The checker failed
-because the file has two problems it will not touch, and re-running reports
-them again:
+changed the file*: `git status` now shows `AM docs/README.md`: the staged copy
+still has the whitespace and the working copy does not. For a fixer, the whole
+fix is to stage again and re-run. The checker failed because the file has two
+problems it will not touch. Re-running reports them again:
 
 ```text
 git add docs/README.md
@@ -134,10 +133,10 @@ pre-commit run --all-files
 ```
 
 So the first commit after adding hooks fails on purpose, once per fixer that
-found something, and the second one goes through. Which hooks to make fixers
-is a choice: a formatter should fix, because nobody wants to hand-apply its
-opinion; a rule that needs a judgement call should report, so the author
-makes it.
+found something. The second one goes through. Which hooks to make fixers is a
+choice. A formatter should fix, because nobody wants to apply its opinion by
+hand. A rule that needs a judgement call should only report, so the author
+makes the call.
 
 ## Start with two hooks
 
@@ -149,10 +148,10 @@ a rule when a review comment shows the need for it.
 ## Limitations
 
 The hooks run only in a clone where `pre-commit install` has been run, and
-`git commit --no-verify` skips them. The same `pre-commit run --all-files`
-in continuous integration is what makes them a rule rather than a
-convention, and its environment setup wants `~/.cache/pre-commit` cached
-between runs.
+`git commit --no-verify` skips them. Running the same
+`pre-commit run --all-files` in continuous integration is what turns them from
+a convention into a rule. That job should cache `~/.cache/pre-commit` between
+runs.
 
 The `rev` pins go stale. `pre-commit autoupdate` moves them to the latest
 tags; Renovate can open the pull request.

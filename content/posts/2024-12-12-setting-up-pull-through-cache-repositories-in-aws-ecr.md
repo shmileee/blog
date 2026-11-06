@@ -9,13 +9,13 @@ categories:
 ---
 
 A pull through cache repository is ECR acting as a proxy for a public
-registry: the first pull of an image fetches it upstream and stores it, and
-later pulls are served from ECR. I set one up in a shared-services account
-for three reasons: an approved list of upstream registries instead of
-whatever a manifest happens to name, images that stay available when the
-upstream is not, and an end to Docker Hub rate limits on clusters that
-reschedule pods all day. This is the Terraform for it, and the two
-permissions that are easy to miss.
+registry. The first pull of an image fetches it from upstream and stores it.
+Later pulls are served from ECR. I set one up in a shared-services account for
+three reasons. It gives an approved list of upstream registries instead of
+whatever a manifest happens to name. Images stay available when the upstream
+is not. And Docker Hub rate limits stop hitting clusters that reschedule pods
+all day. This is the Terraform for it, and the two permissions that are easy
+to miss.
 
 > [!NOTE] Versions and placeholders
 >
@@ -29,8 +29,8 @@ permissions that are easy to miss.
 ## How a pull goes through the cache
 
 A pull through cache rule maps a prefix in your registry to one upstream. A
-client pulls from your registry under that prefix, ECR fetches the image from
-the upstream on the first request and creates a repository for it, and every
+client pulls from your registry under that prefix. On the first request, ECR
+fetches the image from the upstream and creates a repository for it. Every
 later pull is served from ECR. The first path segment after the registry is
 the rule’s prefix:
 
@@ -41,17 +41,17 @@ the rule’s prefix:
 | `quay.io` | `<registry>/quay/coreos/etcd:v3.5.16` |
 | `registry.k8s.io` | `<registry>/registry-k8s-io/pause:3.10` |
 
-`<registry>` is `111111111111.dkr.ecr.eu-west-1.amazonaws.com` throughout.
-Two things follow from “creates a repository on the first pull”. The identity
-pulling needs permission to create repositories in the shared account, and
-the repository ECR creates needs a policy that lets the other accounts read
-it. Both are below; both are the part people forget.
+`<registry>` is `111111111111.dkr.ecr.eu-west-1.amazonaws.com` throughout. Two
+things follow from “creates a repository on the first pull”. The identity
+doing the pull needs permission to create repositories in the shared account.
+And the repository ECR creates needs a policy that lets the other accounts
+read it. Both are below, and both are the part people forget.
 
 ## Docker Hub credentials
 
 Of the four upstreams above only Docker Hub requires authentication. ECR reads
 the credentials from a Secrets Manager secret whose name must start with
-`ecr-pullthroughcache/`; a secret named anything else is rejected when the
+`ecr-pullthroughcache/`. A secret named anything else is rejected when the
 rule is created. The secret holds a Docker Hub username and an access token:
 
 ```hcl title="secrets.tf"
@@ -96,11 +96,11 @@ locals {
 
 ## Letting the organisation read
 
-The repositories the cache creates do not exist when this is written, so
+The repositories the cache creates do not exist yet when this is written. So
 their access policy is attached to a repository creation template, and ECR
-applies it to every repository it creates under the prefix. The policy allows
-any principal in the AWS organisation to read, and to create the repository
-its first pull needs:
+applies it to every repository it creates under the prefix. The policy lets
+any principal in the AWS organisation read, and create the repository its
+first pull needs:
 
 ```hcl title="policy.tf"
 data "aws_organizations_organization" "current" {}
@@ -156,12 +156,12 @@ change.
 ## What the nodes need
 
 An EKS node pulling through the cache needs the usual read actions plus
-`ecr:CreateRepository` and `ecr:BatchImportUpstreamImage`, because the first
-pull of any image creates its repository and imports the image on the node’s
-behalf. Without the create permission the pull fails with a repository-not-found
-error that says nothing about permissions; the
-[containers roadmap issue](https://github.com/aws/containers-roadmap/issues/2053)
-is where AWS explains why. The policy attaches to the node role:
+`ecr:CreateRepository` and `ecr:BatchImportUpstreamImage`. The first pull of
+any image creates its repository and imports the image on the node’s behalf.
+Without the create permission, the pull fails with a repository-not-found
+error that says nothing about permissions. The [containers roadmap
+issue](https://github.com/aws/containers-roadmap/issues/2053) is where AWS
+explains why. The policy attaches to the node role:
 
 ```hcl title="nodes.tf"
 data "aws_iam_policy_document" "ecr_pull_through" {
@@ -212,8 +212,8 @@ repository.
 ## Limitations
 
 ECR caches a fixed list of upstreams. Docker Hub, ECR Public, Quay and the
-Kubernetes registry are above; GitHub, GitLab and Azure container registries
-have been added since and need credentials the way Docker Hub does. A
+Kubernetes registry are above. GitHub, GitLab and Azure container registries
+have been added since, and they need credentials the way Docker Hub does. A
 registry outside the list cannot be proxied.
 
 A cached tag is checked against the upstream at most once every 24 hours, so

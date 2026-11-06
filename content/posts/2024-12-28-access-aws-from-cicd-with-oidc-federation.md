@@ -8,11 +8,11 @@ categories:
   - cicd
 ---
 
-A pipeline that deploys to AWS needs credentials, and the usual answer used to
-be an IAM user’s access key stored in the CI system’s secrets. The key never
+A pipeline that deploys to AWS needs credentials. The usual answer used to be
+an IAM user’s access key stored in the CI system’s secrets. The key never
 expires, anyone with access to the secrets can copy it, and rotating it is a
-project. OpenID Connect replaces it: the CI system signs a token that says
-which repository is running, AWS checks the signature and hands out
+project. OpenID Connect replaces it. The CI system signs a token that says
+which repository is running. AWS checks the signature and hands out
 credentials that expire in an hour. This is the Terraform for GitHub Actions
 and CircleCI, and the conditions in the trust policy that decide who gets in.
 
@@ -26,14 +26,14 @@ and CircleCI, and the conditions in the trust policy that decide who gets in.
 ## How the trust works
 
 Three parties are involved. The CI provider issues a signed JSON Web Token for
-every job, carrying an issuer (`iss`), an audience (`aud`) and a subject
+every job. It carries an issuer (`iss`), an audience (`aud`) and a subject
 (`sub`) that names what is running. AWS holds an *OIDC identity provider* per
-issuer, from which it fetches the issuer’s public keys. An IAM role’s trust
-policy names that provider and puts conditions on the claims; a job that
-presents a token matching them may call `sts:AssumeRoleWithWebIdentity` and
-gets credentials for the role, valid for an hour by default. Nothing is
-stored anywhere, so the conditions are the only place access is decided.
-The claims a GitHub Actions job presents:
+issuer, and fetches the issuer’s public keys from it. An IAM role’s trust
+policy names that provider and puts conditions on the claims. A job whose
+token matches them may call `sts:AssumeRoleWithWebIdentity` and gets
+credentials for the role, valid for an hour by default. Nothing is stored
+anywhere, so the conditions are the only place access is decided. The claims a
+GitHub Actions job presents:
 
 | Claim | Value |
 | --- | --- |
@@ -49,10 +49,9 @@ And a CircleCI job’s:
 | `aud` | `<org-id>` |
 | `sub` | `org/<org-id>/project/<project-id>/user/<user-id>` |
 
-GitHub’s subject carries the repository and the ref, so the trust policy
-below conditions on `sub`. CircleCI’s issuer is already scoped to one
-organisation, so the simplest policy conditions on `aud`, and a per-project
-one adds a `sub` condition.
+GitHub’s subject carries the repository and the ref, so the trust policy below
+checks `sub`. CircleCI’s issuer is already scoped to one organisation, so the
+simplest policy checks `aud`. A per-project policy adds a `sub` condition.
 
 ## What the role may do
 
@@ -76,13 +75,7 @@ resource "aws_iam_policy" "s3_read" {
 
 ## GitHub Actions
 
-One identity provider per AWS account represents GitHub. The thumbprint is the
-well-known one from
-[GitHub’s documentation](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services);
-since mid-2023 AWS validates GitHub’s tokens against its own trusted root
-certificates rather than this value, as
-[GitHub’s changelog](https://github.blog/changelog/2023-06-27-github-actions-update-on-oidc-integration-with-aws)
-explains, so it no longer needs rotating:
+One identity provider per AWS account represents GitHub. The thumbprint is the well-known one from [GitHub’s documentation](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services). Since mid-2023, AWS checks GitHub’s tokens against its own trusted root certificates instead of this value, as [GitHub’s changelog](https://github.blog/changelog/2023-06-27-github-actions-update-on-oidc-integration-with-aws) explains, so it no longer needs rotating:
 
 ```hcl title="github.tf"
 resource "aws_iam_openid_connect_provider" "github" {
@@ -169,12 +162,7 @@ aws sts get-caller-identity
 
 ## CircleCI
 
-CircleCI issues tokens per organisation, so the provider URL and the audience
-both carry the organisation id, found under **Organization Settings** →
-**Overview** in the [CircleCI UI](https://app.circleci.com). The thumbprint is
-that of the issuer’s certificate chain, obtained the way
-[AWS documents](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html),
-written as forty hexadecimal characters:
+CircleCI issues tokens per organisation, so the provider URL and the audience both carry the organisation id. It is under **Organization Settings** → **Overview** in the [CircleCI UI](https://app.circleci.com). The thumbprint is that of the issuer’s certificate chain, found the way [AWS documents](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html), and written as forty hexadecimal characters:
 
 ```hcl title="circleci.tf"
 locals {
@@ -188,8 +176,8 @@ resource "aws_iam_openid_connect_provider" "circleci" {
 }
 ```
 
-The trust policy admits every project in the organisation. Restricting it to
-one project is a second condition, `StringLike` on `sub` with
+The trust policy lets in every project in the organisation. Restricting it to
+one project takes a second condition: `StringLike` on `sub` with
 `org/<org-id>/project/<project-id>/user/*`:
 
 ```hcl title="circleci.tf"
@@ -248,25 +236,25 @@ the same check applies: no key anywhere in the configuration.
 
 An AWS account holds one identity provider per issuer URL. A second
 `aws_iam_openid_connect_provider` for GitHub in the same account fails with
-`EntityAlreadyExists`, so in a repository of many Terraform stacks the
+`EntityAlreadyExists`. So in a repository of many Terraform stacks, the
 provider belongs to one shared stack and the roles reference its ARN.
 
-`repo:<my-org/my-repo>:*` admits every branch, tag and pull request of the
+`repo:<my-org/my-repo>:*` lets in every branch, tag and pull request of the
 repository. A role that can deploy should match the ref,
 `repo:my-org/my-repo:ref:refs/heads/main`, or the environment,
-`repo:my-org/my-repo:environment:production`. Those two are exclusive: a job
-that references a GitHub environment gets the `environment:` form of `sub`
-and no longer matches a `ref:` condition, which is the usual reason a
-previously working role starts refusing a workflow.
+`repo:my-org/my-repo:environment:production`. Those two never both match. A
+job that references a GitHub environment gets the `environment:` form of `sub`
+and no longer matches a `ref:` condition. That is the usual reason a role that
+used to work starts refusing a workflow.
 
-The CircleCI `aud` condition admits every project in the organisation; it
+The CircleCI `aud` condition lets in every project in the organisation. It
 cannot tell a production pipeline from a fork’s. Per-project access needs the
 `sub` condition, and the project id in it.
 
 Credentials last an hour unless the action or orb asks for more, up to the
-role’s maximum session duration; a job longer than that needs the longer
+role’s maximum session duration. A job longer than that needs the longer
 setting, not a retry.
 
-Where the runner has no OIDC issuer, an on-premises agent with no identity of
-its own, the static key remains the only option, and everything above is an
-argument for giving that runner an identity instead.
+Where the runner has no OIDC issuer, such as an on-premises agent with no
+identity of its own, the static key remains the only option. Everything above
+is an argument for giving that runner an identity instead.

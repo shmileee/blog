@@ -22,27 +22,28 @@ door.
 
 ## Why a team is infrastructure
 
-A team exists in more places than the org chart: a GitHub team with repository
-permissions, a Slack channel, an on-call schedule with an escalation policy,
-and the links between them. Each lives in a different system with its own admin
-console, and a team assembled by clicking through them is as consistent as the
-person who did the clicking.
+A team exists in more places than the org chart. It is a GitHub team with
+repository permissions, a Slack channel, an on-call schedule with an
+escalation policy, and the links between them. Each lives in a different
+system with its own admin console. A team assembled by clicking through them
+is as consistent as the person who did the clicking.
 
-Declaring teams as code gives them what infrastructure already has: one
-declaration produces the same footprint in every system, every change is a
-reviewed pull request, a channel renamed by hand shows up as drift in the next
-plan, and removing a team is the reverse of creating one. What a team has to
-say about itself is small: which GitHub teams, which channel, which hours the
+Declaring teams as code gives them what infrastructure already has. One
+declaration produces the same footprint in every system. Every change is a
+reviewed pull request. A channel renamed by hand shows up as drift in the next
+plan. Removing a team is the reverse of creating one. What a team has to say
+about itself is small: which GitHub teams, which channel, which hours the
 rotation covers. Everything else is policy, written once for every team, and
 Terramate’s [code generation](https://terramate.io/docs/cli/code-generation/)
 supplies it.
 
 ## The team descriptor
 
-In [the layout from the first post](/blog/posts/structuring-a-terraform-monorepo-with-terramate/),
-a stack is a directory under `stacks/` marked by a `stack.tm.hcl` file, and it
+In [the layout from the first
+post](/blog/posts/structuring-a-terraform-monorepo-with-terramate/), a stack
+is a directory under `stacks/` marked by a `stack.tm.hcl` file, and it
 inherits globals from the directories above it. Teams get a subtree of their
-own, `stacks/teams/<team>`, beside the account-and-region hierarchy rather than
+own, `stacks/teams/<team>`, beside the account and region tree rather than
 inside it, because a team does not belong to one AWS account:
 
 ```text
@@ -92,9 +93,9 @@ default lives in the generator.
 
 A [JSON Schema](https://json-schema.org/), checked in pre-commit and in
 continuous integration, rejects a malformed descriptor. The three platform
-definitions are the long part of the file and are left out here; what matters
-is `additionalProperties` closed at every level, so a misspelled key is an
-error rather than a silently ignored one:
+definitions are the long part of the file and are left out here. What matters
+is `additionalProperties` set to false at every level, so a misspelled key is
+an error rather than silently ignored:
 
 ```json title="stacks/teams/team.schema.json"
 {
@@ -268,14 +269,15 @@ terramate create stacks/teams/team-search
 git add stacks/teams/team-search && git commit
 ```
 
-`terramate create` writes the `stack.tm.hcl` marker with its identifier and runs
-generation, so the pull request contains the descriptor plus every file derived
-from it. A reviewer reads the JSON, and the HCL beside it either matches the
-policy or the generator has a bug.
+`terramate create` writes the `stack.tm.hcl` marker with its id and runs
+generation. So the pull request contains the descriptor plus every file
+derived from it. A reviewer reads the JSON. The HCL beside it either matches
+the policy or the generator has a bug.
 
-In the production repository this runs in, a few dozen descriptors, about a
-thousand lines of JSON in all, and a generator under three hundred lines stand
-in for several thousand lines of Terraform that nobody writes or reviews.
+In the production repository this runs in, a few dozen descriptors add up to
+about a thousand lines of JSON. Those, plus a generator under three hundred
+lines, stand in for several thousand lines of Terraform that nobody writes or
+reviews.
 
 Teardown runs the same machinery backwards. The real schema wraps the object
 shown earlier in a `oneOf` whose other branch accepts an empty object and
@@ -312,19 +314,20 @@ of exactly those resources, reviewable as a diff before anyone runs it.
 
 ## Limitations
 
-Deleting a key is a destroy. That is correct, and it is also one keystroke from
-removing a channel a team is using; the schema and the review are the only
-guardrails.
+Deleting a key is a destroy. That is correct, and it is also one keystroke
+from removing a channel a team is using. The schema and the review are the
+only guardrails.
 
 The descriptor can only say what the generator already understands. A new
-platform, or a field the modules do not take yet, is a change to `teams.tm.hcl`
-and to a module, which is platform-team work; self-service ends at the schema.
+platform, or a field the modules do not take yet, is a change to
+`teams.tm.hcl` and to a module, which is platform-team work. Self-service ends
+at the schema.
 
 Accepting `{}` costs error quality. A `oneOf` makes the validator report the
-branch it judged closest, and for a descriptor with one typo that is the
+branch it judged closest. For a descriptor with one typo, that is the
 empty-object branch, so the message blames every top-level key instead of the
-misspelled one. Moving the empty case out of the schema and into the pre-commit
-hook fixes that.
+misspelled one. Moving the empty case out of the schema and into the
+pre-commit hook fixes that.
 
 JSON has no comments, so the reason behind an unusual value lives in the commit
 message. The schema’s `description` fields are the only documentation next to
@@ -335,9 +338,4 @@ commit touching every team directory.
 
 ## What’s next?
 
-The next post in the series is about doing this at scale: taking an existing
-repository of a few hundred flat Terraform directories into the layout the
-first three posts describe, one stack at a time, with a plan gate strict enough
-that an agent can do the moving.
-[Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/)
-is that procedure, and what it took to hand it over.
+The next post in the series is about doing this at scale. It takes an existing repository of a few hundred flat Terraform directories into the layout the first three posts describe. It moves one stack at a time, with a plan gate strict enough that an agent can do the moving. [Migrating Terraform stacks to Terramate with an agent](/blog/posts/migrating-terraform-stacks-to-terramate-with-an-agent/) is that procedure, and what it took to hand it over.

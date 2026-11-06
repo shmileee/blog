@@ -7,9 +7,9 @@ categories:
   - mise
 ---
 
-Every contributor and every CI job should run the same Terraform, and the way
-to get that is a version file in the repository, read by a tool that installs
-what it names. I use [mise](https://mise.jdx.dev), which reads asdf’s
+Every contributor and every CI job should run the same Terraform. The way to
+get that is a version file in the repository, read by a tool that installs
+what it names. I use [mise](https://mise.jdx.dev). It reads asdf’s
 `.tool-versions` as well as its own `mise.toml`, so a repository that pinned
 versions for asdf keeps working. The setup is three commands. The decision
 worth writing down is which tools to pin at all.
@@ -64,9 +64,8 @@ terraform {
 ```
 
 Two commands cover it. `mise use terraform@1.9.4`, run in that directory,
-records the version in that directory’s configuration, and it applies
-whenever the shell is inside it. For a one-off run that should not leave
-anything behind:
+records the version in that directory’s configuration. It applies whenever the
+shell is inside it. For a one-off run that should leave nothing behind:
 
 ```bash
 mise x terraform@1.9.4 -- terraform plan
@@ -78,8 +77,8 @@ path, and changes nothing else.
 ## What not to pin
 
 Pinning is not free. Every pinned tool is a stream of update pull requests
-from Renovate or Dependabot, and every merged one makes everyone run
-`mise install` again, so a pin has to buy something. Two examples of tools I
+from Renovate or Dependabot. Every merged one makes everyone run
+`mise install` again. So a pin has to buy something. Two examples of tools I
 leave out:
 
 The AWS CLI. Its minor releases almost never break anything a pipeline
@@ -87,14 +86,14 @@ depends on, so a pin trades daily update noise for a guarantee nobody
 needed. Let it float.
 
 Python, in a repository that is not a Python project. The system version is
-enough for a helper script, and a project that *is* Python has a
-Python-native tool (uv, today) managing interpreters and dependencies
-together; a second manager for the same interpreter helps nobody.
+enough for a helper script. A project that *is* Python has a Python-native
+tool (uv, today) that manages interpreters and dependencies together. A second
+manager for the same interpreter helps nobody.
 
 The tools that earn a pin are the ones whose version changes behaviour a
-reviewer cannot see in the diff: Terraform, whose state format and plan
-output depend on it; linters and formatters, whose rules do; anything that
-generates code that gets committed.
+reviewer cannot see in the diff. Terraform, because its state format and plan
+output depend on the version. Linters and formatters, because their rules do.
+And anything that generates code that gets committed.
 
 ## Limitations
 
@@ -103,9 +102,9 @@ activated (`mise activate` in the shell’s startup file). Without activation,
 `mise x` is the reliable form, and a script that assumes activation fails
 quietly on a machine without it.
 
-Tools outside mise’s core set are installed through asdf plugins, so the
-quality of the install is the quality of that plugin: a plugin that builds
-from source turns `mise install` into a compile.
+Tools outside mise’s core set are installed through asdf plugins. The quality
+of the install is then the quality of that plugin. A plugin that builds from
+source turns `mise install` into a compile.
 
 Two version files in one repository, `.tool-versions` for asdf users and
 `mise.toml` for mise, drift the moment one is edited without the other. Pick

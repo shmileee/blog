@@ -10,12 +10,11 @@ categories:
 
 I keep several [OpenCode](https://opencode.ai) sessions running, one per
 [tmux](https://github.com/tmux/tmux) window. When one goes idle I know
-something finished, but not which window wants me, and a sound for every
-event ([PeonPing](https://www.peonping.com) does that, and does it well)
-pulled my attention away from whatever I was doing meanwhile. So I wrote a
-small OpenCode plugin: a marker in the tmux window list on the exact window
-that is waiting, and a macOS notification only when the terminal is not in
-front.
+something finished, but not which window wants me. A sound for every event
+([PeonPing](https://www.peonping.com) does that, and does it well) pulled my
+attention away from whatever I was doing. So I wrote a small OpenCode plugin.
+It puts a marker in the tmux window list on the exact window that is waiting,
+and sends a macOS notification only when the terminal is not in front.
 
 > [!NOTE] Versions
 >
@@ -57,12 +56,12 @@ front.
 
 ## How the plugin decides
 
-[OpenCode plugins](https://opencode.ai/docs/plugins) are TypeScript modules
-in `~/.config/opencode/plugins/`, run by Bun. A plugin exports an async
-function that returns handlers: one generic `event` handler plus named hooks
-for a few events; the shell commands below use Bun’s `$`. Everything this
-plugin does is a mapping from events to two states, the marker on the window
-and whether to notify:
+[OpenCode plugins](https://opencode.ai/docs/plugins) are TypeScript modules in
+`~/.config/opencode/plugins/`, run by Bun. A plugin exports an async function
+that returns handlers: one generic `event` handler plus named hooks for a few
+events. The shell commands below use Bun’s `$`. Everything this plugin does is
+a mapping from events to two states: the marker on the window, and whether to
+notify:
 
 | Event | Meaning | Effect |
 | --- | --- | --- |
@@ -97,10 +96,10 @@ export const TmuxWindowNotification: Plugin = async () => {
 
 ## Pinning the window
 
-`TMUX_PANE` is the pane OpenCode was started in, and the plugin resolves it to
-a window id once, at load. Without that, an event would be attributed to
-whichever window happens to be active when it fires, which is the one window
-that does not need a marker:
+`TMUX_PANE` is the pane OpenCode was started in, and the plugin turns it into
+a window id once, at load. Without that, an event would go to whichever window
+happens to be active when it fires, which is the one window that does not need
+a marker:
 
 ```ts
 const tmuxQuery = async (target: string, format: string) => {
@@ -115,10 +114,10 @@ const windowLabel = (pane: string) =>
 
 ## The marker
 
-The marker is a tmux window option, set or unset on the pinned window; the
+The marker is a tmux window option, set or unset on the pinned window. The
 status line draws it, and tmux clears it when the window is selected. The
-plugin remembers the last state so that a burst of events sends one command,
-not one per event:
+plugin remembers the last state, so a burst of events sends one command, not
+one per event:
 
 ```ts
 let waitingState: boolean | null = null;
@@ -176,8 +175,8 @@ const notify = async (message: string) => {
 ## The event handler
 
 The generic handler carries the mapping from the table. `session.status`
-arrives with a status that is a string in some events and an object in
-others, hence the unwrapping:
+arrives with a status that is a string in some events and an object in others,
+which is why the handler unwraps it:
 
 ```ts
 event: async ({ event }) => {

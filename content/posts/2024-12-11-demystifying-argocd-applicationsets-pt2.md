@@ -8,13 +8,13 @@ categories:
   - gitops
 ---
 
-The generators from
-[the first post](/blog/posts/demystifying-argocd-applicationsets-pt1/)
-produce parameters; the template’s `spec.source` is where they are spent, and
-it is the field newcomers find ambiguous, because Argo CD renders manifests
-four different ways and each wants a different subset of it. Below are the
-five ways I point an `ApplicationSet` at Helm and Kustomize, each with the
-one constraint that decides for it.
+The generators from [the first
+post](/blog/posts/demystifying-argocd-applicationsets-pt1/) produce
+parameters. The template’s `spec.source` is where they are used. It is the
+field newcomers find confusing. Argo CD renders manifests four different ways,
+and each way wants a different subset of it. Below are the five ways I point
+an `ApplicationSet` at Helm and Kustomize, each with the one constraint that
+decides for it.
 
 > [!NOTE] Series and versions
 >
@@ -35,15 +35,15 @@ one constraint that decides for it.
 | `helm.valueFiles` | — | files beside it | — |
 | `kustomize.*` | — | — | images, patches |
 
-Generator variables can appear in any of these; `{{ metadata.labels.env }}`
+Generator variables can appear in any of these. `{{ metadata.labels.env }}`
 inside a `valueFiles` entry is how one set serves several environments.
 
 ## Option 1: a chart from a Helm repository
 
 For a third-party chart with a handful of overrides. The chart repository is
-not yours, so there is nowhere to put a values file: overrides are inline,
-and the same for every application the set generates unless a generator
-variable supplies them:
+not yours, so there is nowhere to put a values file. Overrides are inline, and
+the same for every application the set generates, unless a generator variable
+supplies them:
 
 ```yaml
 spec:
@@ -112,7 +112,7 @@ spec:
 
 For a third-party chart that needs patches after rendering. Kustomize’s
 `helmCharts` field downloads and renders the chart, and the rest of the
-kustomization applies to the result; the `ApplicationSet` points at the
+kustomization applies to the result. The `ApplicationSet` points at the
 directory exactly as in option 3:
 
 ```yaml title="kustomize/grafana/kustomization.yaml"
@@ -151,11 +151,11 @@ overlays.
 
 > [!WARNING] Deprecated generator
 >
-> `HelmChartInflationGenerator` is deprecated in favour of `helmCharts`,
-> which now takes the same fields. What the generator still does that a
-> `helmCharts` entry cannot is be shared: one definition in a base directory,
-> referenced from every overlay, with each overlay’s own `values.yaml` merged
-> over it.
+> `HelmChartInflationGenerator` is deprecated in favour of `helmCharts`, which
+> now takes the same fields. One thing the generator can still do that a
+> `helmCharts` entry cannot is be shared. One definition sits in a base
+> directory, every overlay references it, and each overlay’s own `values.yaml`
+> is merged over it.
 
 For a third-party chart with several overlays that each add their own values
 on top of shared ones. The generator lives in a base directory; each overlay
@@ -204,10 +204,10 @@ spec:
 ## Limitations
 
 Four rendering paths in one field means four ways to be wrong, and the error
-surfaces in the repo server’s logs rather than in the manifest. `helm
-template`, `kustomize build --enable-helm` and `argocd app manifests <app>`
-are the three commands that show what Argo CD will actually apply, and a
-change to a `source` is not reviewed until one of them has run.
+shows up in the repo server’s logs rather than in the manifest. Three commands
+show what Argo CD will actually apply: `helm template`,
+`kustomize build --enable-helm` and `argocd app manifests <app>`. A change to
+a `source` is not reviewed until one of them has run.
 
 Options 4 and 5 download the chart on every render. A repo server that
 renders many applications from the same chart fetches it many times, and an
@@ -217,7 +217,6 @@ unreachable chart repository fails every one of them at once.
 repository, a Git ref otherwise. A generator that supplies it has to know
 which kind of source it is filling.
 
-Option 5 is on borrowed time. Kustomize keeps the generator for
-compatibility and a future release may drop it; the overlays that share one
-generator are the ones to migrate first, each getting a `helmCharts` entry of
-its own.
+Option 5 will not last. Kustomize keeps the generator for compatibility, and a
+future release may drop it. The overlays that share one generator are the ones
+to migrate first, each getting a `helmCharts` entry of its own.

@@ -8,9 +8,9 @@ categories:
 ---
 
 The layout in this series is a target. Getting an existing repository there is
-one stack at a time: move the code, copy the state object, and prove with a
-plan that nothing changed. Every step is mechanical and the proof is one line
-of output, which is why the last section hands the procedure to an agent.
+done one stack at a time: move the code, copy the state object, and prove with
+a plan that nothing changed. Every step is mechanical and the proof is one
+line of output. That is why the last section hands the procedure to an agent.
 
 > [!NOTE] Series and versions
 >
@@ -23,11 +23,11 @@ of output, which is why the last section hands the procedure to an agent.
 ## Why one stack at a time
 
 The legacy layout is `app/<stack>/<env>/`, each directory with its own backend
-block and a state key derived from its own path. That key is what ties a
-directory to the resources it manages, so converting the whole tree at once
-has every stack planning against a key that does not exist yet, and no
-rollback smaller than one large revert. Per stack, a failed migration is one
-pull request to close.
+block and a state key based on its own path. That key is what ties a directory
+to the resources it manages. Converting the whole tree at once would have
+every stack planning against a key that does not exist yet, with no rollback
+smaller than one large revert. Per stack, a failed migration is one pull
+request to close.
 
 Not every stack is equally safe to move first:
 
@@ -38,7 +38,7 @@ Not every stack is equally safe to move first:
 | Hold | reads or is read via `terraform_remote_state`, owns shared networking or DNS, inline secrets in `*.tf` | migrate later, as a group |
 
 A `terraform_remote_state` producer and its consumers move together, or the
-producer first; otherwise the consumer keeps reading a snapshot that is no
+producer first. Otherwise the consumer keeps reading a snapshot that is no
 longer updated.
 
 ## Move the code, copy the state
@@ -67,8 +67,8 @@ git mv app/<stack-name>/<env>/main.tf \
 ```
 
 The moved `main.tf` loses its `provider` and backend blocks, which the
-generators now emit, and every relative module source gains the `../` segments
-the deeper path costs. What stays is the module calls and any stack-local
+generators now write. Every relative module source gains the `../` segments
+the deeper path needs. What stays is the module calls and any stack-local
 resources.
 
 The state copy is a plain S3 object copy between the old key and the generated
@@ -88,40 +88,41 @@ aws s3api copy-object --profile <profile> --bucket <new-bucket> \
   --copy-source <legacy-bucket>/<legacy-key> --key <new-key>
 ```
 
-Copying rather than moving keeps the migration reversible: revert the pull
-request and the legacy directory resumes planning against its untouched key,
-with the copy left behind as an orphan. Comparing `ETag` and `ContentLength`
-on both objects is a cheap check that the copy is complete.
+Copying rather than moving keeps the migration reversible. Revert the pull
+request and the legacy directory goes back to planning against its untouched
+key, with the copy left behind as an orphan. Comparing `ETag` and
+`ContentLength` on both objects is a cheap check that the copy is complete.
 
 ## The plan gate
 
-With the state copied byte for byte and the code moved rather than rewritten,
-the plan on the pull request refreshes every resource in the copied state,
+The state is copied byte for byte and the code is moved rather than rewritten.
+So the plan on the pull request refreshes every resource in the copied state,
 compares it with the moved configuration, and should find nothing to do:
 
 ```text
 No changes. Your infrastructure matches the configuration.
 ```
 
-Anything else means stop. In practice it is one of two things: the generated
-provider constraint resolves to a different major version than the legacy lock
-file, which is fixed in the declaration and never by upgrading to clear a diff;
-or a global resolved from the new path, the profile or the region, is not the
-one the legacy stack used, so the plan fails to authenticate or wants to
-recreate everything somewhere else. Rarer causes are a renamed provider alias,
-a module source off by one `../`, and path-sensitive functions such as
-`file()` or `path.root` now evaluated from a different directory. Each
-produces a plan that looks like an infrastructure change and is not.
+Anything else means stop. In practice it is one of two things. Either the
+generated provider constraint resolves to a different major version than the
+legacy lock file. That is fixed in the declaration, never by upgrading to
+clear a diff. Or a global resolved from the new path, the profile or the
+region, is not the one the legacy stack used. Then the plan fails to
+authenticate, or wants to recreate everything somewhere else. Rarer causes are
+a renamed provider alias, a module source off by one `../`, and path-sensitive
+functions such as `file()` or `path.root` now evaluated from a different
+directory. Each produces a plan that looks like an infrastructure change and
+is not.
 
 The legacy directory is deleted in the same pull request, and it has to be the
-whole directory: a pipeline that discovers projects by directory will still
+whole directory. A pipeline that discovers projects by directory will still
 find an empty one and fail to initialise it.
 
 ## Handing it to an agent
 
-A runbook whose steps never vary is a script with prose formatting, and this
-one has the shape agents are good at: every input is in the repository, every
-step is mechanical, and success is a diff shape rather than a judgement. So it
+A runbook whose steps never vary is a script written as prose. This one has
+the shape agents are good at: every input is in the repository, every step is
+mechanical, and success is a diff shape rather than a judgement call. So it
 became a skill, a Markdown file an [OpenCode](https://opencode.ai) agent loads
 on demand, with the steps above and the rules it may not negotiate:
 
@@ -140,11 +141,11 @@ through a migration.
 
 Plans and applies run through [Atlantis](https://www.runatlantis.io/), which
 plans when a pull request opens and applies when someone comments on it. That
-fixes two things about the procedure: the state copy lands before the pull
+fixes two things about the procedure. The state copy lands before the pull
 request opens, and the agent prepares but never applies. It opens the pull
-request, reads the plan against the gate, and asks; approval comes from a
+request, reads the plan against the gate, and asks. Approval comes from a
 different identity than the one that wrote the branch. Applying is one comment
-per stack directory, in sequence, because a single comment naming several
+per stack directory, in order, because a single comment naming several
 directories does not work once a pull request carries more than one project:
 
 ```bash
@@ -161,10 +162,10 @@ scans it, each with its own branch, pull request and agent:
 git worktree add ../migrate-<stack> -b migrate/<stack>-to-terramate
 ```
 
-The paths each migration touches are disjoint and the shared imports are never
-edited, so the runs collide on exactly one file: every migration edits
+The paths each migration touches do not overlap, and the shared imports are
+never edited. So the runs collide on exactly one file. Every migration edits
 `CODEOWNERS` to drop the legacy directory it deleted, and the first one to
-merge leaves the others with a conflict there. Rebase and re-plan; it is
+merge leaves the others with a conflict there. Rebase and re-plan. It is
 mechanical, and worth knowing before three agents report the same failure at
 once.
 
@@ -172,15 +173,15 @@ once.
 
 An empty plan proves that the copied state, the moved code and what is
 deployed agree. It does not prove the legacy directory has stopped being
-applied; freeze it once its object is copied, and delete it in the migration
+applied. Freeze it once its object is copied, and delete it in the migration
 pull request.
 
 The state copy needs credentials for the destination account, so that step
 stays on a workstation. Everything else is a pull request.
 
-The classification is advisory. It reads proxies, and a stack can look like a
-clean candidate and still be the one nobody wants replanned on a Friday. The
-gate catches mistakes; the classification only orders the work.
+The classification is a guide, not a rule. It reads signals, and a stack can
+look like a clean candidate and still be the one nobody wants replanned on a
+Friday. The gate catches mistakes. The classification only orders the work.
 
 An agent is fast at the mechanical part and no better than the runbook at the
 judgement part. That is why holding is the default and the confirmations are

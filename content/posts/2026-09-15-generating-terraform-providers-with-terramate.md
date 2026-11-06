@@ -8,10 +8,10 @@ categories:
 ---
 
 In a repository of many root modules, provider configuration is the file most
-likely to be copied from the neighbouring stack: the version constraints, a
-`provider` block with its region and credentials, an alias for each extra
-account. Here a stack declares only which providers it needs, and one
-generator renders the rest.
+likely to be copied from the stack next door. It holds the version
+constraints, a `provider` block with its region and credentials, and an alias
+for each extra account. Here a stack declares only which providers it needs,
+and one generator renders the rest.
 
 > [!NOTE] Series and versions
 >
@@ -28,22 +28,21 @@ generator renders the rest.
 ## The provider boilerplate problem
 
 None of that configuration describes infrastructure, and all of it has to be
-right. The cost shows up on every change that crosses stacks: moving the AWS
-provider from `~> 5.0` to `~> 6.0` is one edit per root module, and a stack
-that was copied before the change keeps the old constraint until somebody
-notices.
+right. The cost shows up on every change that crosses stacks. Moving the AWS
+provider from `~> 5.0` to `~> 6.0` is one edit per root module. A stack that
+was copied before the change keeps the old constraint until somebody notices.
 
 The obvious fixes do not hold. Provider configuration belongs to the root
-module: a reusable module may declare `required_providers`, but a module that
-carries its own `provider` block
-[cannot be called](https://developer.hashicorp.com/terraform/language/modules/develop/providers)
+module. A reusable module may declare `required_providers`, but a module that
+carries its own `provider` block [cannot be
+called](https://developer.hashicorp.com/terraform/language/modules/develop/providers)
 with `count`, `for_each` or `depends_on`. That rules out pushing the
 configuration down into a shared module.
 
-Symlinking one `providers.tf` into every stack fails for a different reason: the
-file is never identical, since the region, the AWS profile and the set of
-aliases differ per stack. Templating it with a script works, and then the
-repository owns a template engine and the drift problem moves into it.
+Symlinking one `providers.tf` into every stack fails for a different reason.
+The file is never identical, because the region, the AWS profile and the set
+of aliases differ per stack. Templating it with a script works. But then the
+repository owns a template engine, and the drift problem moves into it.
 
 What is missing is a declaration: each stack states which providers it needs,
 and something else renders the HCL. That is what Terramate’s
@@ -51,13 +50,14 @@ and something else renders the HCL. That is what Terramate’s
 
 ## Declaring providers as globals
 
-[Part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) covers
-how [globals](https://terramate.io/docs/cli/code-generation/variables/globals)
+[Part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/)
+covers how
+[globals](https://terramate.io/docs/cli/code-generation/variables/globals)
 inherit down a directory tree. The other half of the feature is that a
 [labelled](https://terramate.io/docs/cli/code-generation/variables/globals#labeled-globals)
-`globals` block contributes one key to a map, so the providers a stack sees are
-assembled from every level above it, and where a file sits decides which stacks
-see its entry:
+`globals` block adds one key to a map. So the providers a stack sees are
+assembled from every level above it, and where a file sits decides which
+stacks see its entry:
 
 ```text
 stacks/
@@ -100,7 +100,7 @@ globals "terraform" "providers" "aws.shared-services" {
 }
 ```
 
-The `enabled` flag is what makes this composable: a provider declared high in
+The `enabled` flag is what makes this flexible. A provider declared high in
 the tree can be switched off for one subtree without deleting the declaration.
 Three files, three levels, one map:
 
@@ -139,10 +139,10 @@ Three files, three levels, one map:
 
 ## Generating the provider blocks
 
-The generator is a single `generate_hcl` block in `stacks/imports`, imported by
-the root of each subtree. It has two inputs, the map above and a map of
-credential references covered in the next section, and it renders five kinds
-of block from them:
+The generator is a single `generate_hcl` block in `stacks/imports`, imported
+by the root of each subtree. It has two inputs: the map above, and a map of
+credential references covered in the next section. It renders five kinds of
+block from them:
 
 <figure class="concept-diagram wide" data-concept-diagram>
   <div class="diagram-exhibit" data-exhibit>
@@ -189,14 +189,7 @@ of block from them:
   <figcaption class="exhibit-caption">One generator, two inputs, five kinds of output; the module block’s outputs feed the provider blocks that need a token.</figcaption>
 </figure>
 
-Terraform allows
-[one version constraint per provider](https://developer.hashicorp.com/terraform/language/providers/requirements)
-across the whole configuration, so an alias must produce a `provider` block and
-no `required_providers` entry. Keeping the alias in the key,
-`aws.shared-services`, is how the generator’s
-[`lets`](https://terramate.io/docs/cli/code-generation/variables/lets), its
-local values, tell the two apart. Functions prefixed `tm_` are Terraform’s
-functions run by Terramate at generation time:
+Terraform allows [one version constraint per provider](https://developer.hashicorp.com/terraform/language/providers/requirements) across the whole configuration. So an alias must produce a `provider` block and no `required_providers` entry. Keeping the alias in the key, `aws.shared-services`, is how the generator’s [`lets`](https://terramate.io/docs/cli/code-generation/variables/lets), its local values, tell the two apart. Functions prefixed `tm_` are Terraform’s functions, run by Terramate at generation time:
 
 ```hcl
 lets {
@@ -223,10 +216,10 @@ lets {
 
 The `content` block renders the maps with
 [`tm_dynamic`](https://terramate.io/docs/cli/code-generation/generate-hcl#the-tm-dynamic-block):
-a `required_providers` block from the first, one `provider` block per entry of
-the second, each carrying its own `config` merged with the credential references
-covered in the next section. Inside a `tm_dynamic` the current entry is named
-after the block label, here `provider`:
+The first map becomes a `required_providers` block. The second becomes one
+`provider` block per entry, each carrying its own `config` merged with the
+credential references covered in the next section. Inside a `tm_dynamic`, the
+current entry is named after the block label, here `provider`:
 
 ```hcl
 content {
@@ -292,13 +285,13 @@ provider "aws" {
 
 ## Wiring credentials into providers
 
-Most SaaS providers need a token, and the token comes from the
-[lookup module](/blog/posts/one-terraform-module-for-provider-credentials/)
-described in its own note. A generated attribute is rendered as a value, so a reference
+Most SaaS providers need a token, and the token comes from the [lookup
+module](/blog/posts/one-terraform-module-for-provider-credentials/) described
+in its own note. A generated attribute is rendered as a value. So a reference
 to that module’s output would land in the output file as a quoted string. The
 generator keeps the references as strings and converts them with
 [`tm_hcl_expression`](https://terramate.io/docs/cli/code-generation/functions/tm_hcl_expression),
-which emits a string as verbatim HCL. References that become attributes are
+which writes a string out as raw HCL. References that become attributes are
 kept apart from those that belong inside a nested block, because a block needs
 a `tm_dynamic` of its own:
 
@@ -325,8 +318,8 @@ lets {
 ```
 
 The `content` block above merges `let.credentials` into each provider’s
-attributes; a nested block is rendered inside the provider’s own `content`,
-conditioned on the provider that has one:
+attributes. A nested block is rendered inside the provider’s own `content`,
+only for the provider that has one:
 
 ```hcl
 tm_dynamic "provider" {
@@ -346,9 +339,8 @@ tm_dynamic "provider" {
 }
 ```
 
-The module block itself is generated from the intersection of the providers a
-stack enables and the providers the two maps hold credentials for, and only
-when that intersection is not empty:
+The module block itself is generated for the providers a stack enables that
+also have credentials in the two maps, and only when there is at least one:
 
 ```hcl
 lets {
@@ -438,24 +430,24 @@ credentials gets no module block at all.
 
 ## Reviewing a provider change
 
-Because the output is committed and generation is
-[enforced in continuous integration](/blog/posts/structuring-a-terraform-monorepo-with-terramate/),
-a provider change arrives in review as one edit to a declaration plus the exact
-set of stacks it rewrites. Moving the AWS provider to the next major version is
-a single `version` field in `stacks/imports/aws/provider.tm.hcl`. In the
-production repository this comes from, that one field feeds several hundred
-generated provider blocks. The diff that comes with it names every stack that picks the change
-up, and `terramate list --changed` on the branch is the list the pipeline will
-plan.
+The output is committed and generation is [enforced in continuous
+integration](/blog/posts/structuring-a-terraform-monorepo-with-terramate/). So
+a provider change arrives in review as one edit to a declaration, plus the
+exact set of stacks it rewrites. Moving the AWS provider to the next major
+version is a single `version` field in `stacks/imports/aws/provider.tm.hcl`.
+In the production repository this comes from, that one field feeds several
+hundred generated provider blocks. The diff that comes with it names every
+stack that picks the change up. `terramate list --changed` on the branch is
+the list the pipeline will plan.
 
-A major upgrade is still a large mechanical commit, and splitting it by subtree
-reviews better than landing every stack at once.
+A major upgrade is still a large commit. Splitting it by subtree reviews
+better than landing every stack at once.
 
 ## Limitations
 
-The single-version rule is Terraform’s, not Terramate’s. A stack that genuinely
-needs two major versions of one provider cannot be expressed this way, because
-the alias shares the constraint emitted for the base provider.
+The single-version rule is Terraform’s, not Terramate’s. A stack that really
+needs two major versions of one provider cannot be written this way, because
+the alias shares the constraint written for the base provider.
 
 Every credential reference is a string until `tm_hcl_expression` pastes it
 into the output, so `terramate generate` will happily render a reference to an
@@ -468,10 +460,4 @@ generator edit, not just a global.
 
 ## What’s next?
 
-Everything in this series so far is for people who write Terraform. The next
-post turns the same generator machinery towards people who do not:
-[Generating Terraform for teams from one JSON file](/blog/posts/generating-terraform-for-teams-from-one-json-file/)
-lets a team describe its Slack channel, GitHub teams and on-call rotation in a
-`team.json`, and the monorepo produces the Terraform. It is the point where an
-infrastructure monorepo starts paying off for developers, not only for the
-platform team.
+Everything in this series so far is for people who write Terraform. The next post turns the same generator machinery towards people who do not. [Generating Terraform for teams from one JSON file](/blog/posts/generating-terraform-for-teams-from-one-json-file/) lets a team describe its Slack channel, GitHub teams and on-call rotation in a `team.json`. The monorepo produces the Terraform. It is the point where an infrastructure monorepo starts paying off for developers, not only for the platform team.

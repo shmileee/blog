@@ -8,13 +8,13 @@ categories:
   - gitops
 ---
 
-An `ApplicationSet` is one resource that produces many Argo CD `Application`s:
-a template for the application, plus a *generator* that supplies one set of
-parameters per application to produce. Ten services across four clusters is
-forty `Application` manifests written by hand, or one `ApplicationSet` whose
-generator yields forty parameter sets. This post is about the three
-generators that cover nearly everything I deploy, `list`, `cluster` and
-`matrix`, and what each one produces.
+An `ApplicationSet` is one resource that produces many Argo CD `Application`s.
+It holds a template for the application, plus a *generator* that supplies one
+set of parameters per application. Ten services across four clusters is forty
+`Application` manifests written by hand, or one `ApplicationSet` whose
+generator yields forty parameter sets. This post covers the three generators
+that handle nearly everything I deploy: `list`, `cluster` and `matrix`, and
+what each one produces.
 
 > [!NOTE] Series and versions
 >
@@ -57,8 +57,8 @@ spec:
         namespace: "{{ namespace }}"
 ```
 
-The controller creates two `Application`s from it, and keeps them in step
-with the list: an element removed is an application deleted.
+The controller creates two `Application`s from it and keeps them in step with
+the list. Remove an element and its application is deleted.
 
 | Application | `helm.valueFiles` | `destination.namespace` |
 | --- | --- | --- |
@@ -69,10 +69,10 @@ with the list: an element removed is an application deleted.
 
 One parameter set per cluster Argo CD knows. Clusters are registered as
 secrets labelled `argocd.argoproj.io/secret-type: cluster`, and the generator
-reads them: `name` and `server` from the secret’s fields, plus every label and
-annotation as `metadata.labels.*` and `metadata.annotations.*`. A selector
-narrows the set; without one, every cluster is in. The cluster Argo CD itself
-runs in is named `in-cluster`.
+reads them. It takes `name` and `server` from the secret’s fields, plus every
+label and annotation as `metadata.labels.*` and `metadata.annotations.*`. A
+selector narrows the set. Without one, every cluster is in. The cluster Argo
+CD itself runs in is named `in-cluster`.
 
 Here each cluster carries an `env` label, and the values file follows it:
 
@@ -110,9 +110,9 @@ labelled `env: production`:
 
 ## The matrix generator
 
-The Cartesian product of two generators: every parameter set of the first
-combined with every set of the second. A list of applications times the
-clusters is the common case:
+This combines two generators: every parameter set of the first, paired with
+every set of the second. A list of applications times the clusters is the
+common case:
 
 ```yaml title="team-tools.yaml"
 spec:
@@ -145,10 +145,10 @@ Two applications times the same two clusters is four `Application`s:
 ## A revision per environment
 
 The second generator in a matrix may use the first generator’s parameters,
-which turns the product into a join. Here the list carries an environment
-and the revision to deploy there, and the cluster selector reads the
-environment from the list, so each element lands only on its own clusters
-and staging can run a tagged release while development follows `main`:
+which turns the product into a join. Here the list carries an environment and
+the revision to deploy there. The cluster selector reads the environment from
+the list, so each element lands only on its own clusters. Staging can run a
+tagged release while development follows `main`:
 
 ```yaml title="elasticsearch-exporter.yaml"
 apiVersion: argoproj.io/v1alpha1
@@ -183,22 +183,22 @@ spec:
         namespace: monitoring
 ```
 
-The `revision` values are the fields a tool such as
-[Renovate](https://mend.io/renovate) can bump in a pull request, and in a
-monorepo with `CODEOWNERS` routing each `ApplicationSet` to its team, that
-pull request goes to the people who own the deployment.
+The `revision` values are fields a tool such as
+[Renovate](https://mend.io/renovate) can bump in a pull request. In a monorepo
+where `CODEOWNERS` routes each `ApplicationSet` to its team, that pull request
+goes to the people who own the deployment.
 
 ## Limitations
 
 Every generated parameter is a string unless the `ApplicationSet` sets
-`goTemplate: true`; a list element with a number or a boolean in it has to
+`goTemplate: true`. A list element with a number or a boolean in it has to
 quote it, and nested maps flatten to dotted keys.
 
 A generator that produces nothing produces a deletion. A cluster secret
 removed by mistake, or a list emptied by a bad merge, deletes every
-`Application` the set owned, and with the default sync policy their
-resources with them. `preserveResourcesOnDeletion` and a sync policy of
-`create-only` are the guard rails, and they are opt-in.
+`Application` the set owned. With the default sync policy, their resources go
+with them. `preserveResourcesOnDeletion` and a sync policy of `create-only`
+are the guard rails, and both are opt-in.
 
 Template names must be unique across everything the set generates. Two
 elements that render the same `metadata.name` yield one `Application` and an
@@ -210,8 +210,4 @@ tells you so.
 
 ## What’s next?
 
-Everything above puts variables into `template.spec.source`, and that field
-is where the real choices are: a chart from a Helm repository, a chart in
-Git, a Kustomize overlay, or Kustomize inflating a chart.
-[Pointing an ApplicationSet at Helm and Kustomize: five options](/blog/posts/demystifying-argocd-applicationsets-pt2/)
-takes them one at a time.
+Everything above puts variables into `template.spec.source`. That field is where the real choices are: a chart from a Helm repository, a chart in Git, a Kustomize overlay, or Kustomize inflating a chart. [Pointing an ApplicationSet at Helm and Kustomize: five options](/blog/posts/demystifying-argocd-applicationsets-pt2/) takes them one at a time.
