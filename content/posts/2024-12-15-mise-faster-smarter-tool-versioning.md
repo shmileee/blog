@@ -109,4 +109,6 @@ from source turns `mise install` into a compile.
 
 Two version files in one repository, `.tool-versions` for asdf users and
 `mise.toml` for mise, drift the moment one is edited without the other. Pick
-one; `mise` reads both, so the choice can be made for the asdf holdouts.
+`mise.toml`. mise still reads a `.tool-versions` that is already there, so
+the asdf holdouts lose nothing while they move, and no repository needs a
+second file.

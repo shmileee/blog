@@ -8,7 +8,7 @@ categories:
 ---
 
 Adding a team is a directory, a JSON file and a pull request. The file says
-what the team has, a Slack channel, GitHub teams, an on-call rotation, and a
+what the team has: a Slack channel, GitHub teams, an on-call rotation. A
 generator writes the Terraform for it; nobody copies it from the team next
 door.
 
@@ -32,7 +32,7 @@ Declaring teams as code gives them what infrastructure already has: one
 declaration produces the same footprint in every system, every change is a
 reviewed pull request, a channel renamed by hand shows up as drift in the next
 plan, and removing a team is the reverse of creating one. What a team has to
-say about itself is small, which GitHub teams, which channel, which hours the
+say about itself is small: which GitHub teams, which channel, which hours the
 rotation covers. Everything else is policy, written once for every team, and
 Terramate’s [code generation](https://terramate.io/docs/cli/code-generation/)
 supplies it.

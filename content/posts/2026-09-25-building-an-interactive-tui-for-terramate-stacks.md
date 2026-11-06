@@ -168,7 +168,7 @@ Recorded against a mock repository of 22 deployments:
       aria-label="Terminal recording: a UI listing twelve distinct stacks; selecting one shows its four deployments grouped by environment, then the inventory is filtered to production and fuzzy-searched for eks"
     ></video>
   </div>
-  <figcaption>Twelve identities, 22 deployments: browse, filter to one environment, search, then act on the selection.</figcaption>
+  <figcaption>12 identities, 22 deployments: browse, filter to one environment, search, then act on the selection.</figcaption>
 </figure>
 
 The same views exist without the UI, for scripts and for a quick look. By
@@ -210,7 +210,7 @@ sees, `.tmskip` and all. And it expects the four globals the layout in
 [part one](/blog/posts/structuring-a-terraform-monorepo-with-terramate/) names,
 `account_name`, `region_name`, `environment` and `aws_config_profile`; those
 are its entire contract with the repository. A stack that omits one is not an
-error, it just shows `-`, as the `saas/github` row above does for account and
+error; it just shows `-`, as the `saas/github` row above does for account and
 region.
 
 ## Limitations

@@ -157,7 +157,7 @@ validation {
     for name in var.terraform_providers :
     contains(keys(local.merged_secret_paths), name)
   ])
-  error_message = "Unknown names. Known: ${join(", ", keys(local.secret_paths))}."
+  error_message = "Unknown names. Known: ${join(", ", keys(local.merged_secret_paths))}."
 }
 ```
 

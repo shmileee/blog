@@ -9,12 +9,13 @@ categories:
 ---
 
 A pull through cache repository is ECR acting as a proxy for a public
-registry: the first pull of an image fetches it upstream and stores it, later
-pulls are served from ECR. I set one up in a shared-services account for three
-reasons: an approved list of upstream registries instead of whatever a manifest
-happens to name, images that stay available when the upstream is not, and an
-end to Docker Hub rate limits on clusters that reschedule pods all day. This
-is the Terraform for it, and the two permissions that are easy to miss.
+registry: the first pull of an image fetches it upstream and stores it, and
+later pulls are served from ECR. I set one up in a shared-services account
+for three reasons: an approved list of upstream registries instead of
+whatever a manifest happens to name, images that stay available when the
+upstream is not, and an end to Docker Hub rate limits on clusters that
+reschedule pods all day. This is the Terraform for it, and the two
+permissions that are easy to miss.
 
 > [!NOTE] Versions and placeholders
 >

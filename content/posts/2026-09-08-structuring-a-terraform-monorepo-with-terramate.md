@@ -95,9 +95,10 @@ the declaration:
 
 ```text
 stacks/
-├── imports/                          shared generators
+├── imports/                          shared imports
 │   ├── 000_terraform.tm.hcl          the S3 backend
-│   └── 001_providers.tm.hcl          the providers
+│   ├── 001_providers.tm.hcl          the providers generator
+│   └── aws/provider.tm.hcl           the aws provider declaration
 ├── aws/
 │   ├── aws.tm.hcl                    imports the generators
 │   └── acme-development/
@@ -112,7 +113,8 @@ stacks/
 
 `aws.tm.hcl` pulls the two generators into the subtree, so every stack below it
 gets a backend file and a providers file. The backend generator is shown
-below; the providers generator is the next post’s subject.
+below; the providers generator is the subject of
+[Generating Terraform providers with Terramate](/blog/posts/generating-terraform-providers-with-terramate/).
 
 ```hcl title="stacks/aws/aws.tm.hcl"
 import {
@@ -137,7 +139,7 @@ globals {
 ```
 
 A region directory states the region, and pulls in the AWS provider
-declaration that depends on it (the next post shows its contents):
+declaration that depends on it (the providers post shows its contents):
 
 ```hcl title="stacks/aws/acme-development/eu-west-1/region.tm.hcl"
 globals {
@@ -310,7 +312,7 @@ Change detection is based on what is inside a stack directory, so a change to a
 shared import marks a stack as changed only when the generated output actually
 changes. Editing a comment in an import and regenerating leaves
 `terramate list --changed` empty. That keeps the pipeline quiet, and it also
-means the import edit itself is not the trigger, the regenerated file is.
+means the import edit itself is not the trigger; the regenerated file is.
 
 The layout assumes a stack belongs to one account and one region. A stack that
 spans two accounts has to pick a home directory, which also picks its state

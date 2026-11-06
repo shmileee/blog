@@ -7,8 +7,8 @@ categories:
   - devex
 ---
 
-Markdown accumulates small inconsistencies, trailing spaces, doubled blank
-lines, a heading with no blank line under it, and they surface in diffs and
+Markdown accumulates small inconsistencies: trailing spaces, doubled blank
+lines, a heading with no blank line under it. They surface in diffs and
 reviews where nobody wanted to talk about them. The
 [pre-commit framework](https://pre-commit.com/) runs formatters and linters
 on the staged files before every commit, so they never reach the diff. The
@@ -51,7 +51,7 @@ already in the working tree. `markdownlint`, as configured above, is a
 *checker*: it reports and leaves the file alone. The difference shows on the
 first run. Take a file with three trailing spaces after “space”, two blank
 lines in a row, a heading with no blank line under it and no newline at the
-end:
+end; the spaces and the missing newline are invisible in the listing:
 
 ```markdown title="docs/README.md"
 # Notes

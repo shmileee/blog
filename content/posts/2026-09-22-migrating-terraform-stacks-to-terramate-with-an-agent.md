@@ -61,8 +61,7 @@ Scaffolding comes first, so that the new backend key exists on paper before
 anything is copied into it:
 
 ```bash
-cd stacks/aws/<account-folder>/<region>
-terramate create <stack-name>
+terramate create stacks/aws/<account-folder>/<region>/<stack-name>
 git mv app/<stack-name>/<env>/main.tf \
   stacks/aws/<account-folder>/<region>/<stack-name>/main.tf
 ```
