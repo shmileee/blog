@@ -95,7 +95,7 @@ The rule has to know two things a manifest does not say. An image with no
 slash in it, `python:3.12`, lives under Docker Hub’s `library/` namespace, and
 the cache’s repository path has to say so. That is what `withLibrary` is for.
 And an image with no registry or no tag means `docker.io/…:latest`.
-[`image_normalize`](https://kyverno.io/docs/writing-policies/jmespath/#image_normalize)
+[`image_normalize`](https://kyverno.io/docs/policy-types/cluster-policy/jmespath/#image_normalize)
 writes both out, so the rewritten reference is complete and the repository ECR
 creates has one clear name.
 
